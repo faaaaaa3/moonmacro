@@ -330,3 +330,23 @@ test "verify_builtin_logger" {
   if result.find("leaving calc") is None { abort("expected leaving calc, got: " + result) }
   if result.find("defer { println") is None { abort("expected defer, got: " + result) }
 }
+
+test "verify_builtin_timeit" {
+  let source = "timeit!(fn compute() -> Int {\n  99\n})"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("@env.now()") is None { abort("expected @env.now(), got: " + result) }
+  if result.find("__timeit_start") is None { abort("expected __timeit_start, got: " + result) }
+  if result.find("compute took") is None { abort("expected compute took, got: " + result) }
+}
+
+test "verify_builtin_tryn" {
+  let source = "tryn!(read_line(), 3)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("__tryn_max = 3") is None { abort("expected __tryn_max = 3, got: " + result) }
+  if result.find("read_line()") is None { abort("expected read_line(), got: " + result) }
+  if result.find("loop") is None { abort("expected loop, got: " + result) }
+  if result.find("break None") is None { abort("expected break None, got: " + result) }
+  if result.find("break __tryn_cur") is None { abort("expected break __tryn_cur, got: " + result) }
+}

@@ -28,6 +28,8 @@ pub fn expand_builtin(name : String, args : String) -> String? {
     }
     "echo" => expand_echo(args)
     "logger" => expand_logger(args)
+    "timeit" => expand_timeit(args)
+    "tryn" => expand_tryn(args)
     _ => None
   }
 }
@@ -306,6 +308,97 @@ fn expand_logger(args : String) -> String? {
   }
   result.write_string("\n")
   result.write_string(after)
+  Some(result.to_string())
+}
+
+fn expand_timeit(args : String) -> String? {
+  let s = args.trim().to_owned()
+  if !s.has_prefix("fn ") { return None }
+
+  let len = s.length()
+  let name_start = 3
+  let mut name_end = name_start
+  while name_end < len {
+    let c = s[name_end]
+    let valid = (c >= ('a' : UInt16) && c <= ('z' : UInt16)) ||
+      (c >= ('A' : UInt16) && c <= ('Z' : UInt16)) ||
+      c == ('_' : UInt16) ||
+      (name_end > name_start && c >= ('0' : UInt16) && c <= ('9' : UInt16))
+    if valid { name_end = name_end + 1 } else { break }
+  }
+  if name_end == name_start { return None }
+  let func_name = s[name_start:name_end].to_owned()
+
+  let mut depth = 0
+  let mut brace_open = -1
+  let mut pos = 0
+  while pos < len {
+    let c = s[pos]
+    if c == ('"' : UInt16) { pos = skip_string_from(s, pos); pos = pos - 1 }
+    else if c == ('(' : UInt16) || c == ('<' : UInt16) || c == ('[' : UInt16) || c == ('{' : UInt16) {
+      if c == ('{' : UInt16) && depth == 0 { brace_open = pos; break }
+      depth = depth + 1
+    } else if c == (')' : UInt16) || c == (']' : UInt16) || c == ('}' : UInt16) {
+      depth = depth - 1
+    } else if c == ('>' : UInt16) && depth > 0 {
+      depth = depth - 1
+    } else if c == ('-' : UInt16) && pos + 1 < len && s[pos + 1] == ('>' : UInt16) {
+      pos = pos + 1
+    }
+    pos = pos + 1
+  }
+  if brace_open < 0 { return None }
+
+  let mut d = 1
+  let mut brace_close = brace_open + 1
+  while brace_close < len && d > 0 {
+    let c = s[brace_close]
+    if c == ('"' : UInt16) { brace_close = skip_string_from(s, brace_close); brace_close = brace_close - 1 }
+    else if c == ('{' : UInt16) { d = d + 1 }
+    else if c == ('}' : UInt16) { d = d - 1 }
+    brace_close = brace_close + 1
+  }
+  if d != 0 { return None }
+  brace_close = brace_close - 1
+
+  let before = s[0:brace_open + 1].to_owned()
+  let body = s[brace_open + 1:brace_close].to_owned()
+  let after = s[brace_close:].to_owned()
+
+  let result = StringBuilder()
+  result.write_string(before)
+  result.write_string("\n  let __timeit_start = @env.now()")
+  result.write_string("\n  defer { println(\"")
+  result.write_string(func_name)
+  result.write_string(" took \" + (@env.now() - __timeit_start).to_string() + \"ms\") }")
+  let trimmed_body = body.trim().to_owned()
+  if trimmed_body.length() > 0 {
+    result.write_string("\n  ")
+    result.write_string(trimmed_body)
+  }
+  result.write_string("\n")
+  result.write_string(after)
+  Some(result.to_string())
+}
+
+fn expand_tryn(args : String) -> String? {
+  let parts = split_all_top_level_commas(args)
+  if parts.length() != 2 { return None }
+  let expr = parts[0].trim().to_owned()
+  let n = parts[1].trim().to_owned()
+  let result = StringBuilder()
+  result.write_string("{\n  let __tryn_max = ")
+  result.write_string(n)
+  result.write_string("\n  let mut __tryn_i = 0")
+  result.write_string("\n  let __tryn_val = loop {")
+  result.write_string("\n    if __tryn_i >= __tryn_max { break None }")
+  result.write_string("\n    __tryn_i = __tryn_i + 1")
+  result.write_string("\n    let __tryn_cur = ")
+  result.write_string(expr)
+  result.write_string("\n    if __tryn_cur is Some(_) { break __tryn_cur }")
+  result.write_string("\n  }")
+  result.write_string("\n  __tryn_val")
+  result.write_string("\n}")
   Some(result.to_string())
 }
 

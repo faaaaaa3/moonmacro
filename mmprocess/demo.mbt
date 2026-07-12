@@ -134,6 +134,24 @@ fn demo_walkthrough() -> Unit {
   let r15 = @moonmacro.expand_file(src15, @moonmacro.find_macro_defs(src15))
   println("Output:")
   println(@moonmacro.strip_macro_defs(r15))
+  println("")
+
+  println("=== 16. timeit! ===\n")
+  let src16 = parts[15]
+  println("Input:")
+  println(src16)
+  let r16 = @moonmacro.expand_file(src16, @moonmacro.find_macro_defs(src16))
+  println("Output:")
+  println(@moonmacro.strip_macro_defs(r16))
+  println("")
+
+  println("=== 17. tryn! ===\n")
+  let src17 = parts[16]
+  println("Input:")
+  println(src17)
+  let r17 = @moonmacro.expand_file(src17, @moonmacro.find_macro_defs(src17))
+  println("Output:")
+  println(@moonmacro.strip_macro_defs(r17))
 }
 
 fn demo_parts() -> Array[String] {
@@ -153,5 +171,7 @@ fn demo_parts() -> Array[String] {
     "inspect!(m.get(\"C\"), \"Some(1)\")\n",
     "echo!(x, y)\n",
     "logger!(fn add(x: Int, y: Int) -> Int {\n  x + y\n})\n",
+    "timeit!(fn compute() -> Int {\n  99\n})\n",
+    "tryn!(read_line(), 3)\n",
   ]
 }

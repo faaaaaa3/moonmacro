@@ -787,3 +787,50 @@ test "expand_builtin_logger_not_fn" {
   let result = @moonmacro.expand_builtin("logger", "let x = 42")
   if result is Some(_) { abort("expected None for non-fn") }
 }
+
+test "expand_builtin_timeit_simple" {
+  match @moonmacro.expand_builtin("timeit", "fn foo() {\n  bar()\n}") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("@env.now()") is None { abort("missing @env.now(): " + code) }
+      if code.find("__timeit_start") is None { abort("missing __timeit_start: " + code) }
+      if code.find("defer") is None { abort("missing defer: " + code) }
+      if code.find("took") is None { abort("missing took: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_timeit_empty_body" {
+  match @moonmacro.expand_builtin("timeit", "fn empty() {}") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("@env.now()") is None { abort("missing @env.now(): " + code) }
+      if code.find("empty took") is None { abort("missing func name in msg: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_timeit_not_fn" {
+  let result = @moonmacro.expand_builtin("timeit", "let x = 42")
+  if result is Some(_) { abort("expected None for non-fn") }
+}
+
+test "expand_builtin_tryn_simple" {
+  match @moonmacro.expand_builtin("tryn", "get_val(), 3") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("__tryn_max = 3") is None { abort("missing max: " + code) }
+      if code.find("loop") is None { abort("missing loop: " + code) }
+      if code.find("break None") is None { abort("missing break None: " + code) }
+      if code.find("get_val()") is None { abort("missing get_val: " + code) }
+      if code.find("__tryn_cur is Some(_)") is None { abort("missing Some check: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_tryn_wrong_arg_count" {
+  let result = @moonmacro.expand_builtin("tryn", "get_val()")
+  if result is Some(_) { abort("expected None for 1 arg") }
+  let result2 = @moonmacro.expand_builtin("tryn", "a, b, c")
+  if result2 is Some(_) { abort("expected None for 3 args") }
+}
