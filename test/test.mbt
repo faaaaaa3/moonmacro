@@ -695,3 +695,26 @@ test "expand_builtin_call_each_triple_arg" {
     }
   }
 }
+
+test "expand_builtin_inspect_simple" {
+  match @moonmacro.expand_builtin("inspect", "x, \"abc\"") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "@debug.debug_inspect(x, content=\"abc\")" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_inspect_with_func_call" {
+  match @moonmacro.expand_builtin("inspect", "m.get(\"C\"), \"Some(1)\"") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "@debug.debug_inspect(m.get(\"C\"), content=\"Some(1)\")" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_inspect_no_comma" {
+  let result = @moonmacro.expand_builtin("inspect", "x")
+  if result is Some(_) { abort("expected None without comma") }
+}

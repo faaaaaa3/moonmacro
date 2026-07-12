@@ -303,3 +303,12 @@ test "verify_builtin_repeat_custom_sep" {
   let result = @moonmacro.expand_file(source, defs)
   if result.find("x+x+x") is None { abort("expected x+x+x, got: " + result) }
 }
+
+test "verify_builtin_inspect" {
+  let source = "inspect!(f(), \"ok\")"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("@debug.debug_inspect(f(), content=\"ok\")") is None {
+    abort("expected inspect expansion, got: " + result)
+  }
+}

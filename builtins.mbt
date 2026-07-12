@@ -18,6 +18,14 @@ pub fn expand_builtin(name : String, args : String) -> String? {
     "let_array" => expand_let_array(args)
     "call_each" => expand_call_each(args)
     "repeat" => expand_repeat(args)
+    "inspect" => {
+      match split_at_top_level_comma(args) {
+        Some((expr, expected)) => {
+          Some("@debug.debug_inspect(" + expr + ", content=" + expected.trim().to_owned() + ")")
+        }
+        None => None
+      }
+    }
     _ => None
   }
 }
