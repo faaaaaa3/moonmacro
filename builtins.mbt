@@ -14,6 +14,7 @@ pub fn expand_builtin(name : String, args : String) -> String? {
       if msg.length() > 0 { Some("abort(" + msg + ")") }
       else { Some("abort(\"not implemented\")") }
     }
+    "dbg" => Some("{ let __dbg_val = " + args + "; println(\"[dbg] \" + stringify!(" + args + ") + \" = \" + __dbg_val.to_string()); __dbg_val }")
     _ => None
   }
 }

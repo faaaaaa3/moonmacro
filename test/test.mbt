@@ -336,3 +336,176 @@ test "no_matches" {
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 0 { abort("expected 0 invocations, got " + invs.length().to_string()) }
 }
+
+test "expand_builtin_dbg_simple" {
+  match @moonmacro.expand_builtin("dbg", "x") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("let __dbg_val = x") is None { abort("expected var binding, got: " + code) }
+      if code.find("stringify!(x)") is None { abort("expected stringify!(x)") }
+      if code.find("__dbg_val.to_string()") is None { abort("expected to_string call") }
+      if code.find("__dbg_val") is None { abort("expected __dbg_val") }
+    }
+  }
+}
+
+test "expand_builtin_dbg_complex_expr" {
+  match @moonmacro.expand_builtin("dbg", "foo(1, 2) + bar[baz]") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("let __dbg_val = foo(1, 2) + bar[baz]") is None { abort("expected full expr, got: " + code) }
+      if code.find("stringify!(foo(1, 2) + bar[baz])") is None { abort("expected stringify with brackets, got: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_dbg_empty" {
+  match @moonmacro.expand_builtin("dbg", "") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("let __dbg_val = ") is None { abort("expected empty var binding") }
+    }
+  }
+}
+
+test "find_macro_defs_empty" {
+  let source = ""
+  let defs = @moonmacro.find_macro_defs(source)
+  if defs.length() != 0 { abort("expected 0 defs") }
+}
+
+test "find_macro_defs_no_macros" {
+  let source = "fn main { println(\"hello\") }"
+  let defs = @moonmacro.find_macro_defs(source)
+  if defs.length() != 0 { abort("expected 0 defs") }
+}
+
+test "find_macro_invocations_nested_brackets" {
+  let source = "foo!(bar[baz])"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 1 { abort("expected 1 invocation") }
+  match invs[0] {
+    @moonmacro.FuncCall(name, args, delim, _s, _e) => {
+      if name != "foo" { abort("expected name foo") }
+      if args != "bar[baz]" { abort("expected args 'bar[baz]'") }
+      if delim != "(" { abort("expected delim (") }
+    }
+    _ => abort("expected FuncCall")
+  }
+}
+
+test "expand_builtin_assert" {
+  match @moonmacro.expand_builtin("assert", "x > 0") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("if !(x > 0)") is None { abort("expected condition") }
+      if code.find("assertion failed: x > 0") is None { abort("expected message") }
+    }
+  }
+}
+
+test "expand_builtin_matches_no_comma" {
+  let result = @moonmacro.expand_builtin("matches", "x Some(y)")
+  if result is Some(_) { abort("expected None without comma") }
+}
+
+test "expand_builtin_stringify_empty" {
+  match @moonmacro.expand_builtin("stringify", "") {
+    None => abort("expected Some")
+    Some(code) => if code != "\"\"" { abort("expected empty quotes") }
+  }
+}
+
+test "expand_builtin_stringify_special" {
+  match @moonmacro.expand_builtin("stringify", "a + b * c") {
+    None => abort("expected Some")
+    Some(code) => if code != "\"a + b * c\"" { abort("expected quoted, got: " + code) }
+  }
+}
+
+test "generate_derive_constructor_single_field" {
+  let result = @moonmacro.generate_derives(["Constructor"], "Wrap", "struct", "", "{ value: Int }")
+  if result.find("pub fn Wrap::new") is None { abort("expected Wrap::new") }
+  if result.find("value: Int") is None { abort("expected value: Int") }
+  if result.find("{ value }") is None { abort("expected struct literal") }
+}
+
+test "generate_derive_constructor_empty_struct" {
+  let result = @moonmacro.generate_derives(["Constructor"], "Empty", "struct", "", "{}")
+  if result.find("requires at least one field") is None { abort("expected error for empty struct") }
+}
+
+test "generate_derive_constructor_mut_field" {
+  let result = @moonmacro.generate_derives(["Constructor"], "Point", "struct", "", "{ mut x: Int, y: String }")
+  if result.find("pub fn Point::new") is None { abort("expected Point::new") }
+  if result.find("x: Int") is None { abort("expected x: Int param") }
+  if result.find("{ x, y }") is None { abort("expected struct literal") }
+}
+
+test "generate_derive_getters_single_field" {
+  let result = @moonmacro.generate_derives(["Getters"], "Wrap", "struct", "", "{ value: String }")
+  if result.find("pub fn Wrap::Value") is None { abort("expected getter Value") }
+  if result.find("self: Wrap") is None { abort("expected self param") }
+  if result.find("-> String") is None { abort("expected String return") }
+}
+
+test "generate_derive_getters_empty_struct" {
+  let result = @moonmacro.generate_derives(["Getters"], "Empty", "struct", "", "{}")
+  if result.find("requires at least one field") is None { abort("expected error for empty struct") }
+}
+
+test "generate_derive_getters_generic" {
+  let result = @moonmacro.generate_derives(["Getters"], "Wrap", "struct", "[T]", "{ value: T }")
+  if result.find("pub fn Wrap::Value") is None { abort("expected getter Value") }
+  if result.find("self: Wrap[T]") is None { abort("expected self: Wrap[T]") }
+  if result.find("-> T") is None { abort("expected T return") }
+  if result.find("self.value") is None { abort("expected self.value body") }
+}
+
+test "generate_derive_enum_from_str_single" {
+  let result = @moonmacro.generate_derives(["EnumFromStr"], "Status", "enum", "", "{\n  Active\n}")
+  if result.find("pub fn Status::from_string") is None { abort("expected from_string") }
+  if result.find("\"Active\" => Some(Active)") is None { abort("expected Active match") }
+  if result.find("_ => None") is None { abort("expected fallback") }
+}
+
+test "generate_derive_enum_from_str_mixed" {
+  let result = @moonmacro.generate_derives(["EnumFromStr"], "Expr", "enum", "", "{\n  Int(Int)\n  Add(Expr, Expr)\n  Zero\n}")
+  if result.find("pub fn Expr::from_string") is None { abort("expected from_string") }
+  if result.find("\"Zero\" => Some(Zero)") is None { abort("expected Zero match") }
+  if result.find("\"Int\"") is Some(_) { abort("should not match Int (data variant)") }
+}
+
+test "separate_derive_on_different_structs" {
+  let source = "#[macro_derive(Constructor)]\nstruct Point { x: Int }\n\n#[macro_derive(Getters)]\nstruct Wrap { value: String }"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 2 { abort("expected 2 separate invocations, got " + invs.length().to_string()) }
+  match invs[0] {
+    @moonmacro.Derive(traits, name, _kind, _generics, _body, _s, _e) => {
+      if traits.length() != 1 { abort("expected 1 trait") }
+      if name != "Point" { abort("expected Point") }
+    }
+    _ => abort("expected Derive for Point")
+  }
+  match invs[1] {
+    @moonmacro.Derive(traits, name, _kind, _generics, _body, _s, _e) => {
+      if traits[0] != "Getters" { abort("expected Getters") }
+      if name != "Wrap" { abort("expected Wrap") }
+    }
+    _ => abort("expected Derive for Wrap")
+  }
+}
+
+test "expand_builtin_unknown_case_sensitive" {
+  let result = @moonmacro.expand_builtin("DBG", "x")
+  if result is Some(_) { abort("expected None for wrong case") }
+}
+
+test "expand_file_no_change" {
+  let source = "fn add(x: Int, y: Int) -> Int { x + y }"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result != source { abort("plain code should be unchanged") }
+}

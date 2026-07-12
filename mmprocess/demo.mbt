@@ -71,6 +71,15 @@ fn demo_walkthrough() -> Unit {
   let r8 = @moonmacro.expand_file(src8, @moonmacro.find_macro_defs(src8))
   println("Output:")
   println(@moonmacro.strip_macro_defs(r8))
+  println("")
+
+  println("=== 9. dbg! ===\n")
+  let src9 = parts[8]
+  println("Input:")
+  println(src9)
+  let r9 = @moonmacro.expand_file(src9, @moonmacro.find_macro_defs(src9))
+  println("Output:")
+  println(@moonmacro.strip_macro_defs(r9))
 }
 
 fn demo_parts() -> Array[String] {
@@ -83,5 +92,6 @@ fn demo_parts() -> Array[String] {
     "#[macro_derive(EnumFromStr)]\nenum Color {\n  Red\n  Green\n  Blue\n}\n",
     "let s = stringify!(hello world)\n",
     "assert!(x > 0)\n",
+    "fn main {\n  let x = 42\n  let y = dbg!(x + 1)\n  println(y.to_string())\n}\n",
   ]
 }

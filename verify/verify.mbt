@@ -131,3 +131,90 @@ test "verify_preserves_non_macro_code" {
   let result = @moonmacro.expand_file(source, defs)
   if result != source { abort("non-macro source should be unchanged, got: " + result) }
 }
+
+test "verify_derive_constructor_single_field" {
+  let source = "#[macro_derive(Constructor)]\nstruct Wrap {\n  value: String\n}"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("struct Wrap") is None { abort("struct Wrap should be present") }
+  if result.find("pub fn Wrap::new") is None { abort("expected Wrap::new") }
+  if result.find("value: String") is None { abort("expected value param") }
+}
+
+test "verify_derive_constructor_mut_field" {
+  let source = "#[macro_derive(Constructor)]\nstruct Point {\n  mut x: Int\n  y: String\n}"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("pub fn Point::new") is None { abort("expected Point::new") }
+  if result.find("x: Int, y: String") is None { abort("expected params") }
+}
+
+test "verify_derive_constructor_empty" {
+  let source = "#[macro_derive(Constructor)]\nstruct Empty {}"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("struct Empty") is None { abort("struct should be preserved") }
+}
+
+test "verify_derive_getters_generic" {
+  let source = "#[macro_derive(Getters)]\nstruct Wrap[T] {\n  value: T\n}"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("struct Wrap[T]") is None { abort("struct should be present") }
+  if result.find("pub fn Wrap::Value") is None { abort("expected getter Value") }
+  if result.find("self: Wrap[T]") is None { abort("expected self: Wrap[T]") }
+  if result.find("-> T") is None { abort("expected T return type") }
+}
+
+test "verify_derive_getters_single_field" {
+  let source = "#[macro_derive(Getters)]\nstruct Wrap { value: String }"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("pub fn Wrap::Value") is None { abort("expected getter Value") }
+  if result.find("self: Wrap") is None { abort("expected self param") }
+}
+
+test "verify_derive_enum_from_str_mixed" {
+  let source = "#[macro_derive(EnumFromStr)]\nenum Expr {\n  Int(Int)\n  Add(Expr, Expr)\n  Zero\n  One\n}"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("pub fn Expr::from_string") is None { abort("expected from_string") }
+  if result.find("\"Zero\" => Some(Zero)") is None { abort("expected Zero") }
+  if result.find("\"One\" => Some(One)") is None { abort("expected One") }
+  if result.find("\"Int\"") is Some(_) { abort("should not match data variant Int") }
+  if result.find("_ => None") is None { abort("expected fallback") }
+}
+
+test "verify_builtin_matches_complex" {
+  let source = "let b = matches!(x, Some(y))"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("match x") is None { abort("expected match x") }
+  if result.find("Some(y) => true") is None { abort("expected Some(y) => true") }
+}
+
+test "verify_builtin_assert_complex" {
+  let source = "assert!(x > 0 && y < 10)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("if !(x > 0 && y < 10)") is None { abort("expected condition preserved") }
+  if result.find("assertion failed: x > 0 && y < 10") is None { abort("expected message preserved") }
+}
+
+test "verify_builtin_dbg" {
+  let source = "let x = 42\nlet y = dbg!(x + 1)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("let __dbg_val = x + 1") is None { abort("expected var binding, got: " + result) }
+  // stringify! is expanded in a later pass, so check for its result
+  if result.find("\"x + 1\"") is None { abort("expected quoted expr text, got: " + result) }
+  if result.find("__dbg_val.to_string()") is None { abort("expected to_string") }
+}
+
+test "verify_builtin_dbg_nested_parens" {
+  let source = "let y = dbg!(foo(1, 2))"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("let __dbg_val = foo(1, 2)") is None { abort("expected nested parens, got: " + result) }
+  if result.find("\"foo(1, 2)\"") is None { abort("expected quoted expr text") }
+}
