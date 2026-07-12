@@ -287,3 +287,19 @@ test "verify_builtin_call_each_mixed_arity" {
   if result.find("f(b, c)") is None { abort("expected f(b, c)") }
   if result.find("f(d)") is None { abort("expected f(d)") }
 }
+
+test "verify_builtin_repeat_array_make" {
+  let source = "let state = [repeat!(Array::make(4, 0), 4)]"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("[Array::make(4, 0), Array::make(4, 0), Array::make(4, 0), Array::make(4, 0)]") is None {
+    abort("expected repeated array init, got: " + result)
+  }
+}
+
+test "verify_builtin_repeat_custom_sep" {
+  let source = "repeat!(x, 3, +)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("x+x+x") is None { abort("expected x+x+x, got: " + result) }
+}

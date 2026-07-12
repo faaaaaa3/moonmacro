@@ -17,6 +17,7 @@ pub fn expand_builtin(name : String, args : String) -> String? {
     "dbg" => Some("{ let __dbg_val = " + args + "; println(\"[dbg] \" + stringify!(" + args + ") + \" = \" + __dbg_val.to_string()); __dbg_val }")
     "let_array" => expand_let_array(args)
     "call_each" => expand_call_each(args)
+    "repeat" => expand_repeat(args)
     _ => None
   }
 }
@@ -185,6 +186,25 @@ fn expand_call_each(args : String) -> String? {
       if count == 0 { None } else { Some(result.to_string()) }
     }
   }
+}
+
+fn expand_repeat(args : String) -> String? {
+  let parts = split_all_top_level_commas(args)
+  if parts.length() < 2 { return None }
+  let expr = parts[0].trim().to_owned()
+  if expr.length() == 0 { return None }
+  let count_str = parts[1].trim().to_owned()
+  let count = parse_int_safe(count_str)
+  if count <= 0 { return None }
+  let sep = if parts.length() >= 3 {
+    parts[2].trim().to_owned()
+  } else { ", " }
+  let result = StringBuilder()
+  for i in 0..<count {
+    if i > 0 { result.write_string(sep) }
+    result.write_string(expr)
+  }
+  Some(result.to_string())
 }
 
 fn ends_with_paren(s : String) -> Bool {

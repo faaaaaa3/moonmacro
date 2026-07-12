@@ -634,6 +634,58 @@ test "expand_builtin_call_each_mixed_arity" {
   }
 }
 
+test "expand_builtin_repeat_simple" {
+  match @moonmacro.expand_builtin("repeat", "Array::make(4, 0), 4") {
+    None => abort("expected Some")
+    Some(code) => {
+      let expected = "Array::make(4, 0), Array::make(4, 0), Array::make(4, 0), Array::make(4, 0)"
+      if code != expected { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_repeat_twice" {
+  match @moonmacro.expand_builtin("repeat", "42, 2") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "42, 42" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_repeat_custom_sep" {
+  match @moonmacro.expand_builtin("repeat", "x, 3, +") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "x+x+x" { abort("unexpected code: [" + code + "]") }
+    }
+  }
+}
+
+test "expand_builtin_repeat_once" {
+  match @moonmacro.expand_builtin("repeat", "hello, 1") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "hello" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_repeat_zero" {
+  let result = @moonmacro.expand_builtin("repeat", "x, 0")
+  if result is Some(_) { abort("expected None for count 0") }
+}
+
+test "expand_builtin_repeat_negative" {
+  let result = @moonmacro.expand_builtin("repeat", "x, -1")
+  if result is Some(_) { abort("expected None for negative count") }
+}
+
+test "expand_builtin_repeat_no_count" {
+  let result = @moonmacro.expand_builtin("repeat", "x")
+  if result is Some(_) { abort("expected None without count") }
+}
+
 test "expand_builtin_call_each_triple_arg" {
   let args = "f, (1, 2, 3), (4, 5, 6)"
   match @moonmacro.expand_builtin("call_each", args) {
