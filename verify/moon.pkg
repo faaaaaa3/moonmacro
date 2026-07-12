@@ -1,0 +1,2 @@
+import { "aaa/moonmacro", }
+options("is-test": true)
