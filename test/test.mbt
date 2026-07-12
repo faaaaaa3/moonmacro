@@ -718,3 +718,72 @@ test "expand_builtin_inspect_no_comma" {
   let result = @moonmacro.expand_builtin("inspect", "x")
   if result is Some(_) { abort("expected None without comma") }
 }
+
+test "expand_builtin_echo_simple" {
+  match @moonmacro.expand_builtin("echo", "x") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "println(\"x = \\{x}\")" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_echo_multi" {
+  match @moonmacro.expand_builtin("echo", "x, y") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "println(\"x = \\{x}, y = \\{y}\")" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_echo_three" {
+  match @moonmacro.expand_builtin("echo", "a, b, c") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "println(\"a = \\{a}, b = \\{b}, c = \\{c}\")" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_echo_empty" {
+  let result = @moonmacro.expand_builtin("echo", "  ")
+  if result is Some(_) { abort("expected None for whitespace-only") }
+}
+
+test "expand_builtin_logger_simple" {
+  match @moonmacro.expand_builtin("logger", "fn foo() {\n  bar()\n}") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("entering foo") is None { abort("missing entering: " + code) }
+      if code.find("leaving foo") is None { abort("missing leaving: " + code) }
+      if code.find("defer") is None { abort("missing defer: " + code) }
+      if code.find("entering foo") <= code.find("defer") { abort("defer must come before entering: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_logger_empty_body" {
+  match @moonmacro.expand_builtin("logger", "fn empty() {}") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("entering empty") is None { abort("missing entering: " + code) }
+      if code.find("leaving empty") is None { abort("missing leaving: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_logger_with_ret" {
+  match @moonmacro.expand_builtin("logger", "fn add(x: Int, y: Int) -> Int {\n  x + y\n}") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("entering add") is None { abort("missing entering: " + code) }
+      if code.find("leaving add") is None { abort("missing leaving: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_logger_not_fn" {
+  let result = @moonmacro.expand_builtin("logger", "let x = 42")
+  if result is Some(_) { abort("expected None for non-fn") }
+}

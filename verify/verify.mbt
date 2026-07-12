@@ -312,3 +312,21 @@ test "verify_builtin_inspect" {
     abort("expected inspect expansion, got: " + result)
   }
 }
+
+test "verify_builtin_echo" {
+  let source = "echo!(x, y)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("println(\"x = \\{x}, y = \\{y}\")") is None {
+    abort("expected echo expansion, got: " + result)
+  }
+}
+
+test "verify_builtin_logger" {
+  let source = "logger!(fn calc() -> Int {\n  42\n})"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("entering calc") is None { abort("expected entering calc, got: " + result) }
+  if result.find("leaving calc") is None { abort("expected leaving calc, got: " + result) }
+  if result.find("defer { println") is None { abort("expected defer, got: " + result) }
+}
