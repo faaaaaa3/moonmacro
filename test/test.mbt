@@ -199,14 +199,14 @@ test "expand_builtin_unknown" {
 }
 
 test "find_derive_invocation" {
-  let source = "#[macro_derive(ToJson)]\nstruct Point { x: Int, y: Int }\n"
+  let source = "#[macro_derive(Constructor)]\nstruct Point { x: Int, y: Int }\n"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 1 { abort("expected 1 invocation") }
   match invs[0] {
     @moonmacro.Derive(traits, name, kind, _generics, _body, _s, _e) => {
       if traits.length() != 1 { abort("expected 1 trait, got " + traits.length().to_string()) }
-      if traits[0] != "ToJson" { abort("expected ToJson, got " + traits[0]) }
+      if traits[0] != "Constructor" { abort("expected Constructor, got " + traits[0]) }
       if name != "Point" { abort("expected Point") }
       if kind != "struct" { abort("expected struct") }
     }
@@ -215,7 +215,7 @@ test "find_derive_invocation" {
 }
 
 test "derive_with_braces" {
-  let source = "#[macro_derive(ToJson)]\nstruct Point {\n  x: Int\n  y: Int\n}"
+  let source = "#[macro_derive(Constructor)]\nstruct Point {\n  x: Int\n  y: Int\n}"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 1 { abort("expected 1 invocation") }
@@ -228,30 +228,97 @@ test "derive_with_braces" {
   }
 }
 
-test "generate_derive_to_json_enum_unit" {
-  let result = @moonmacro.generate_derives(["ToJson"], "Color", "enum", "", "{\n  Red\n  Green\n}")
-  if result.find("to_json") is None { abort("expected to_json") }
-  if result.find("Red") is None { abort("expected Red variant") }
+test "generate_derive_constructor" {
+  let result = @moonmacro.generate_derives(["Constructor"], "Point", "struct", "", "{ x: Int, y: Int }")
+  if result.find("pub fn Point::new") is None { abort("expected Point::new, got: " + result) }
+  if result.find("x: Int, y: Int") is None { abort("expected params") }
+  if result.find("{ x, y }") is None { abort("expected struct literal") }
 }
 
-test "generate_derive_to_json_enum_tuple" {
-  let result = @moonmacro.generate_derives(["ToJson"], "Expr", "enum", "", "{\n  Int(Int)\n  Add(Int, Int)\n}")
-  if result.find(".to_json()") is None { abort("expected to_json calls") }
+test "generate_derive_constructor_generic" {
+  let result = @moonmacro.generate_derives(["Constructor"], "Pair", "struct", "[T]", "{ first: T, second: T }")
+  if result.find("pub fn Pair::new[T]") is None { abort("expected Pair::new[T]") }
+  if result.find("first: T, second: T") is None { abort("expected typed params") }
+  if result.find("-> Pair[T]") is None { abort("expected Pair[T] return") }
+}
+
+test "generate_derive_getters" {
+  let result = @moonmacro.generate_derives(["Getters"], "Point", "struct", "", "{ x: Int, y: String }")
+  if result.find("pub fn Point::X") is None { abort("expected getter X (PascalCase), got: " + result) }
+  if result.find("pub fn Point::Y") is None { abort("expected getter Y") }
+  if result.find("self: Point") is None { abort("expected self param") }
+  if result.find("-> Int") is None { abort("expected Int return") }
+  if result.find("-> String") is None { abort("expected String return") }
+  if result.find("self.x") is None { abort("expected self.x body") }
+}
+
+test "generate_derive_enum_from_str" {
+  let result = @moonmacro.generate_derives(["EnumFromStr"], "Color", "enum", "", "{\n  Red\n  Green\n}")
+  if result.find("pub fn Color::from_string") is None { abort("expected from_string") }
+  if result.find("\"Red\" => Some(Red)") is None { abort("expected Red match") }
+  if result.find("\"Green\" => Some(Green)") is None { abort("expected Green match") }
+  if result.find("_ => None") is None { abort("expected fallback") }
+  if result.find("-> Color?") is None { abort("expected Color? return") }
+}
+
+test "generate_derive_enum_from_str_skips_data_variants" {
+  let result = @moonmacro.generate_derives(["EnumFromStr"], "Expr", "enum", "", "{\n  Int(Int)\n  Add(Expr, Expr)\n}")
+  if result.find("// EnumFromStr requires") is None { abort("expected error for no unit variants") }
 }
 
 test "stacked_derive_same_struct" {
-  let source = "#[macro_derive(ToJson)]\n#[macro_derive(ToJson)]\nstruct Point { x: Int }\n"
+  let source = "#[macro_derive(Constructor)]\n#[macro_derive(Constructor)]\nstruct Point { x: Int }\n"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 1 { abort("expected 1 invocation, got " + invs.length().to_string()) }
   match invs[0] {
     @moonmacro.Derive(traits, name, _kind, _generics, _body, _s, _e) => {
       if traits.length() != 2 { abort("expected 2 merged traits, got " + traits.length().to_string()) }
-      if traits[0] != "ToJson" { abort("expected ToJson") }
-      if traits[1] != "ToJson" { abort("expected ToJson") }
+      if traits[0] != "Constructor" { abort("expected Constructor") }
+      if traits[1] != "Constructor" { abort("expected Constructor") }
       if name != "Point" { abort("expected Point") }
     }
     _ => abort("expected Derive")
+  }
+}
+
+test "generate_derive_constructor_kind_error" {
+  let result = @moonmacro.generate_derives(["Constructor"], "Color", "enum", "", "{ Red; Green }")
+  if result.find("only supports structs") is None { abort("expected error for enum") }
+}
+
+test "generate_derive_getters_kind_error" {
+  let result = @moonmacro.generate_derives(["Getters"], "Color", "enum", "", "{ Red; Green }")
+  if result.find("only supports structs") is None { abort("expected error for enum") }
+}
+
+test "generate_derive_enum_from_str_kind_error" {
+  let result = @moonmacro.generate_derives(["EnumFromStr"], "Point", "struct", "", "{ x: Int }")
+  if result.find("only supports enums") is None { abort("expected error for struct") }
+}
+
+test "expand_builtin_matches" {
+  match @moonmacro.expand_builtin("matches", "x, Some(y)") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code.find("match x") is None { abort("expected match x") }
+      if code.find("Some(y) => true") is None { abort("expected pattern match") }
+    }
+  }
+}
+
+test "expand_builtin_todo" {
+  match @moonmacro.expand_builtin("todo", "") {
+    None => abort("expected Some")
+    Some(code) => if code != "abort(\"not implemented\")" { abort("expected 'not implemented'") }
+  }
+}
+
+test "expand_builtin_todo_with_message" {
+  // args from source todo!("fix this") includes surrounding quotes
+  match @moonmacro.expand_builtin("todo", "\"fix this\"") {
+    None => abort("expected Some")
+    Some(code) => if code != "abort(\"fix this\")" { abort("expected abort with message") }
   }
 }
 

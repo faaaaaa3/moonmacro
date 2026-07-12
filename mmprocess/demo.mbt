@@ -28,7 +28,7 @@ fn demo_walkthrough() -> Unit {
   println(@moonmacro.strip_macro_defs(r3))
   println("")
 
-  println("=== 4. Derive ToJson for struct ===\n")
+  println("=== 4. Derive Constructor for struct ===\n")
   let src4 = parts[3]
   println("Input:")
   println(src4)
@@ -37,7 +37,7 @@ fn demo_walkthrough() -> Unit {
   println(@moonmacro.strip_macro_defs(r4))
   println("")
 
-  println("=== 5. Derive ToJson for enum ===\n")
+  println("=== 5. Derive Getters for struct ===\n")
   let src5 = parts[4]
   println("Input:")
   println(src5)
@@ -46,7 +46,7 @@ fn demo_walkthrough() -> Unit {
   println(@moonmacro.strip_macro_defs(r5))
   println("")
 
-  println("=== 6. Derive ToJson for generic enum ===\n")
+  println("=== 6. Derive EnumFromStr for enum ===\n")
   let src6 = parts[5]
   println("Input:")
   println(src6)
@@ -78,9 +78,9 @@ fn demo_parts() -> Array[String] {
     "macro_rules! greet {\n  ($name:expr) => {\n    fn greet_$name() -> String { \"Hello, $name!\" }\n  }\n}\ngreet!(World)\n",
     "macro_rules! make_tuple {\n  ($($item:expr),*) => {\n    ($($item),*)\n  }\n}\nlet tup = make_tuple!(1, 2, 3)\n",
     "macro_rules! double { ($x:expr) => { $x * 2 } }\nmacro_rules! apply { ($f:expr) => { double!($f) } }\nlet result = apply!(21)\n",
-    "#[macro_derive(ToJson)]\nstruct Point {\n  x: Int\n  y: Int\n}\n",
-    "#[macro_derive(ToJson)]\nenum Color {\n  Red\n  Green(Int)\n  Blue(Int, String)\n}\n",
-    "#[macro_derive(ToJson)]\nenum Option[T] {\n  Some(T)\n  None\n}\n",
+    "#[macro_derive(Constructor)]\nstruct Point {\n  x: Int\n  y: Int\n}\n",
+    "#[macro_derive(Getters)]\nstruct Point {\n  x: Int\n  y: Int\n}\n",
+    "#[macro_derive(EnumFromStr)]\nenum Color {\n  Red\n  Green\n  Blue\n}\n",
     "let s = stringify!(hello world)\n",
     "assert!(x > 0)\n",
   ]

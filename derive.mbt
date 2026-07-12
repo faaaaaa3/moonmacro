@@ -10,9 +10,65 @@ pub fn generate_derives(traits : Array[String], name : String, kind : String, ge
 
 fn generate_derive_impl(trait_name : String, name : String, kind : String, generics : String, body : String) -> String {
   match trait_name {
-    "ToJson" => generate_to_json(name, kind, generics, body)
+    "Constructor" => generate_constructor(name, kind, generics, body)
+    "Getters" => generate_getters(name, kind, generics, body)
+    "EnumFromStr" => generate_enum_from_str(name, kind, generics, body)
     _ => "// unknown derive: " + trait_name + " for " + name + "\n"
   }
+}
+
+fn generate_constructor(name : String, kind : String, generics : String, body : String) -> String {
+  if kind != "struct" { return "// Constructor only supports structs\n" }
+  let fields = parse_struct_fields(body)
+  if fields.length() == 0 { return "// Constructor requires at least one field\n" }
+  let full = type_with_generics(name, generics)
+  let params = fields.map(fn(f) { f.0 + ": " + f.1 }).join(", ")
+  let assigns = fields.map(fn(f) { f.0 }).join(", ")
+  let gen_list = if generics.length() > 0 { generics } else { "" }
+  "pub fn " + name + "::new" + gen_list + "(" + params + ") -> " + full + " { { " + assigns + " } }\n"
+}
+
+fn generate_getters(name : String, kind : String, generics : String, body : String) -> String {
+  if kind != "struct" { return "// Getters only supports structs\n" }
+  let fields = parse_struct_fields(body)
+  if fields.length() == 0 { return "// Getters requires at least one field\n" }
+  let full = type_with_generics(name, generics)
+  let buf = StringBuilder()
+  for f in fields {
+    let getter_name = pascal_case(f.0)
+    buf.write_string("pub fn " + name + "::" + getter_name + "(self: " + full + ") -> " + f.1 + " { self." + f.0 + " }\n")
+  }
+  buf.to_string()
+}
+
+fn pascal_case(s : String) -> String {
+  if s.length() == 0 { return s }
+  let first = s[0]
+  let upper = if first >= ('a' : UInt16) && first <= ('z' : UInt16) {
+    (first - 32 : UInt16)
+  } else { first }
+  let result = StringBuilder()
+  result.write_char(upper.to_int().unsafe_to_char())
+  if s.length() > 1 { result.write_string(s[1:].to_owned()) }
+  result.to_string()
+}
+
+fn generate_enum_from_str(name : String, kind : String, generics : String, body : String) -> String {
+  if kind != "enum" { return "// EnumFromStr only supports enums\n" }
+  let variants = parse_enum_variants(body)
+  let unit = variants.filter(fn(v) { v.field_types.length() == 0 })
+  if unit.length() == 0 { return "// EnumFromStr requires at least one unit variant\n" }
+  let full = type_with_generics(name, generics)
+  let buf = StringBuilder()
+  buf.write_string("pub fn " + name + "::from_string(s: String) -> " + full + "? {\n")
+  buf.write_string("  match s {\n")
+  for v in unit {
+    buf.write_string("    \"" + v.name + "\" => Some(" + v.name + "),\n")
+  }
+  buf.write_string("    _ => None\n")
+  buf.write_string("  }\n")
+  buf.write_string("}\n")
+  buf.to_string()
 }
 
 fn type_with_generics(name : String, generics : String) -> String {
@@ -51,8 +107,6 @@ fn parse_struct_fields(body : String) -> Array[(String, String)] {
 priv struct EnumVariant {
   name : String
   field_types : Array[String]
-  is_tuple : Bool
-  field_names : Array[String]
 }
 
 fn parse_enum_variants(body : String) -> Array[EnumVariant] {
@@ -72,16 +126,14 @@ fn parse_enum_variants(body : String) -> Array[EnumVariant] {
     if pos < len && body[pos] == ('(' : UInt16) {
       let types = read_comma_types(body, pos)
       pos = types.1
-      let gen_names = gen_field_names(types.0.length())
-      variants.push({ name: name_res.0, field_types: types.0, is_tuple: true, field_names: gen_names })
+      variants.push({ name: name_res.0, field_types: types.0 })
     } else if pos < len && body[pos] == ('{' : UInt16) {
       let fields_res = read_record_fields(body, pos)
       pos = fields_res.1
-      let names = fields_res.0.map(fn(f) { f.0 })
       let types = fields_res.0.map(fn(f) { f.1 })
-      variants.push({ name: name_res.0, field_types: types, is_tuple: false, field_names: names })
+      variants.push({ name: name_res.0, field_types: types })
     } else {
-      variants.push({ name: name_res.0, field_types: [], is_tuple: false, field_names: [] })
+      variants.push({ name: name_res.0, field_types: [] })
     }
     pos = skip_ws(body, pos)
     if pos < len && body[pos] == (',' : UInt16) { pos = pos + 1 }
@@ -141,19 +193,6 @@ fn read_record_fields(s : String, start : Int) -> (Array[(String, String)], Int)
   (fields, pos)
 }
 
-fn gen_field_names(count : Int) -> Array[String] {
-  let names : Array[String] = []
-  let letters = "abcdefghijklmnopqrstuvwxyz"
-  for i in 0..<count {
-    if i < 26 {
-      names.push(letters[i:i + 1].to_owned())
-    } else {
-      names.push("x" + i.to_string())
-    }
-  }
-  names
-}
-
 fn read_field_ident(s : String, start : Int) -> (String, Int) {
   let mut pos = start
   let len = s.length()
@@ -185,50 +224,4 @@ fn read_type(s : String, start : Int) -> (String, Int) {
     pos = pos + 1
   }
   (s[start:pos].trim().to_owned(), pos)
-}
-
-fn generate_to_json(name : String, kind : String, generics : String, body : String) -> String {
-  let full_name = type_with_generics(name, generics)
-  if kind == "enum" {
-    return generate_to_json_enum(name, generics, full_name, body)
-  }
-  let fields = parse_struct_fields(body)
-  if fields.length() == 0 {
-    return "pub fn " + name + "::to_json(self : " + full_name + ") -> Json { { \"type\": \"" + name + "\" } }\n"
-  }
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::to_json(self : " + full_name + ") -> Json {\n")
-  buf.write_string("  {\n")
-  for f in fields {
-    buf.write_string("    \"" + f.0 + "\": self." + f.0 + ".to_json(),\n")
-  }
-  buf.write_string("  }\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
-fn generate_to_json_enum(name : String, _generics : String, full_name : String, body : String) -> String {
-  let variants = parse_enum_variants(body)
-  if variants.length() == 0 {
-    return "pub fn " + name + "::to_json(self : " + full_name + ") -> Json { { \"type\": \"" + name + "\" } }\n"
-  }
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::to_json(self : " + full_name + ") -> Json {\n")
-  buf.write_string("  match self {\n")
-  for v in variants {
-    if v.field_types.length() == 0 {
-      buf.write_string("    " + v.name + " => { \"type\": \"" + v.name + "\" },\n")
-    } else if v.is_tuple {
-      let params = v.field_names.join(", ")
-      let values = v.field_names.map(fn(n) { n + ".to_json()" })
-      buf.write_string("    " + v.name + "(" + params + ") => { \"type\": \"" + v.name + "\", \"value\": " + values.join(", ") + " },\n")
-    } else {
-      let pat = "{ " + v.field_names.join(", ") + " }"
-      let values = v.field_names.map(fn(n) { "\"" + n + "\": " + n + ".to_json()" })
-      buf.write_string("    " + pat + " => { \"type\": \"" + v.name + "\", " + values.join(", ") + " },\n")
-    }
-  }
-  buf.write_string("  }\n")
-  buf.write_string("}\n")
-  buf.to_string()
 }
