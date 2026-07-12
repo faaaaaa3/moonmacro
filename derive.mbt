@@ -10,11 +10,7 @@ pub fn generate_derives(traits : Array[String], name : String, kind : String, ge
 
 fn generate_derive_impl(trait_name : String, name : String, kind : String, generics : String, body : String) -> String {
   match trait_name {
-    "Show" => generate_show(name, kind, generics, body)
-    "Debug" => generate_show(name, kind, generics, body)
-    "Eq" => generate_eq(name, kind, generics, body)
     "ToJson" => generate_to_json(name, kind, generics, body)
-    "Clone" => generate_clone(name, kind, generics, body)
     _ => "// unknown derive: " + trait_name + " for " + name + "\n"
   }
 }
@@ -191,99 +187,6 @@ fn read_type(s : String, start : Int) -> (String, Int) {
   (s[start:pos].trim().to_owned(), pos)
 }
 
-fn generate_show(name : String, kind : String, generics : String, body : String) -> String {
-  let full_name = type_with_generics(name, generics)
-  if kind == "enum" {
-    return generate_show_enum(name, generics, full_name, body)
-  }
-  let fields = parse_struct_fields(body)
-  if fields.length() == 0 {
-    return "pub fn " + name + "::to_string(self : " + full_name + ") -> String { \"" + name + "\" }\n"
-  }
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::to_string(self : " + full_name + ") -> String {\n")
-  buf.write_string("  let parts : Array[String] = [\n")
-  for f in fields {
-    buf.write_string("    \"" + f.0 + "=\" + self." + f.0 + ".to_string(),\n")
-  }
-  buf.write_string("  ]\n")
-  buf.write_string("  \"" + name + "(\" + parts.join(\", \") + \")\"\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
-fn generate_show_enum(name : String, _generics : String, full_name : String, body : String) -> String {
-  let variants = parse_enum_variants(body)
-  if variants.length() == 0 {
-    return "pub fn " + name + "::to_string(self : " + full_name + ") -> String { \"" + name + "\" }\n"
-  }
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::to_string(self : " + full_name + ") -> String {\n")
-  buf.write_string("  match self {\n")
-  for v in variants {
-    buf.write_string("    ")
-    if v.field_types.length() == 0 {
-      buf.write_string(v.name + " => \"" + v.name + "\"\n")
-    } else if v.is_tuple {
-      let params = v.field_names.join(", ")
-      let parts : Array[String] = v.field_names.map(fn(n) { n + ".to_string()" })
-      buf.write_string(v.name + "(" + params + ") => \"" + v.name + "(\" + " + parts.join(" + \", \" + ") + " + \")\"\n")
-    } else {
-      let names = v.field_names
-      let parts : Array[String] = names.map(fn(n) { "\"" + n + "=\" + " + n + ".to_string()" })
-      let pat = "{ " + names.join(", ") + " }"
-      buf.write_string(pat + " => \"" + v.name + "(\" + " + parts.join(" + \", \" + ") + " + \")\"\n")
-    }
-  }
-  buf.write_string("  }\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
-fn generate_eq(name : String, kind : String, generics : String, body : String) -> String {
-  let full_name = type_with_generics(name, generics)
-  if kind == "enum" {
-    return generate_eq_enum(name, generics, full_name, body)
-  }
-  let fields = parse_struct_fields(body)
-  if fields.length() == 0 {
-    return "pub fn " + name + "::op_equal(self : " + full_name + ", other : " + full_name + ") -> Bool { true }\n"
-  }
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::op_equal(self : " + full_name + ", other : " + full_name + ") -> Bool {\n")
-  let conds : Array[String] = fields.map(fn(f) { "self." + f.0 + " == other." + f.0 })
-  buf.write_string("  " + conds.join(" && ") + "\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
-fn generate_eq_enum(name : String, _generics : String, full_name : String, body : String) -> String {
-  let variants = parse_enum_variants(body)
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::op_equal(self : " + full_name + ", other : " + full_name + ") -> Bool {\n")
-  buf.write_string("  match (self, other) {\n")
-  for v in variants {
-    if v.field_types.length() == 0 {
-      buf.write_string("    (" + v.name + ", " + v.name + ") => true\n")
-    } else if v.is_tuple {
-      let conds : Array[String] = v.field_names.map(fn(n) { n + "0 == " + n + "1" })
-      buf.write_string("    (" + v.name + "(" + v.field_names.map(fn(n) { n + "0" }).join(", ") + "), " +
-        v.name + "(" + v.field_names.map(fn(n) { n + "1" }).join(", ") + ")) => " +
-        conds.join(" && ") + "\n")
-    } else {
-      let names = v.field_names
-      let conds : Array[String] = names.map(fn(n) { n + "0 == " + n + "1" })
-      let pat0 = "{ " + names.map(fn(n) { n + ": " + n + "0" }).join(", ") + " }"
-      let pat1 = "{ " + names.map(fn(n) { n + ": " + n + "1" }).join(", ") + " }"
-      buf.write_string("    (" + pat0 + ", " + pat1 + ") => " + conds.join(" && ") + "\n")
-    }
-  }
-  buf.write_string("    _ => false\n")
-  buf.write_string("  }\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
 fn generate_to_json(name : String, kind : String, generics : String, body : String) -> String {
   let full_name = type_with_generics(name, generics)
   if kind == "enum" {
@@ -323,46 +226,6 @@ fn generate_to_json_enum(name : String, _generics : String, full_name : String, 
       let pat = "{ " + v.field_names.join(", ") + " }"
       let values = v.field_names.map(fn(n) { "\"" + n + "\": " + n + ".to_json()" })
       buf.write_string("    " + pat + " => { \"type\": \"" + v.name + "\", " + values.join(", ") + " },\n")
-    }
-  }
-  buf.write_string("  }\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
-fn generate_clone(name : String, kind : String, generics : String, body : String) -> String {
-  let full_name = type_with_generics(name, generics)
-  if kind == "enum" {
-    return generate_clone_enum(name, generics, full_name, body)
-  }
-  let fields = parse_struct_fields(body)
-  if fields.length() == 0 {
-    return "pub fn " + name + "::clone(self : " + full_name + ") -> " + full_name + " { " + name + " }\n"
-  }
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::clone(self : " + full_name + ") -> " + full_name + " {\n")
-  let assigns : Array[String] = fields.map(fn(f) { f.0 + ": self." + f.0 + ".clone()" })
-  buf.write_string("  { " + assigns.join(", ") + " }\n")
-  buf.write_string("}\n")
-  buf.to_string()
-}
-
-fn generate_clone_enum(name : String, _generics : String, full_name : String, body : String) -> String {
-  let variants = parse_enum_variants(body)
-  let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::clone(self : " + full_name + ") -> " + full_name + " {\n")
-  buf.write_string("  match self {\n")
-  for v in variants {
-    if v.field_types.length() == 0 {
-      buf.write_string("    " + v.name + " => " + v.name + ",\n")
-    } else if v.is_tuple {
-      let params = v.field_names.join(", ")
-      let cloned = v.field_names.map(fn(n) { n + ".clone()" })
-      buf.write_string("    " + v.name + "(" + params + ") => " + v.name + "(" + cloned.join(", ") + "),\n")
-    } else {
-      let pat = "{ " + v.field_names.join(", ") + " }"
-      let cloned = v.field_names.map(fn(n) { n + ": " + n + ".clone()" })
-      buf.write_string("    " + pat + " => { " + cloned.join(", ") + " },\n")
     }
   }
   buf.write_string("  }\n")

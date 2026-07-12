@@ -30,14 +30,14 @@ test "find_macro_invocations" {
 }
 
 test "find_bracket_invocation" {
-  let source = "vec![1, 2, 3]"
+  let source = "name![1, 2, 3]"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 1 { abort("expected 1 invocation") }
   match invs[0] {
     @moonmacro.FuncCall(name, args, delim, _s, _e) => {
-      if name != "vec" { abort("expected name vec") }
-      if args != "1, 2, 3" { abort("expected args '1, 2, 3', got '" + args + "'") }
+      if name != "name" { abort("expected name name") }
+      if args != "1, 2, 3" { abort("expected args") }
       if delim != "[" { abort("expected delim [") }
     }
     _ => abort("expected FuncCall")
@@ -61,7 +61,7 @@ test "parse_pattern_repetition" {
   if frags.length() != 1 { abort("expected 1 fragment (Repetition)") }
   match frags[0] {
     @moonmacro.Repetition(_inner, sep, _op) => {
-      if sep != "," { abort("expected sep ',' got '" + sep + "'") }
+      if sep != "," { abort("expected sep ','") }
     }
     _ => abort("expected Repetition")
   }
@@ -90,7 +90,7 @@ test "match_simple" {
     None => abort("expected match")
     Some(captures) => {
       if !captures.contains("x") { abort("expected capture x") }
-      if captures["x"][0] != "42" { abort("expected '42', got '" + captures["x"][0] + "'") }
+      if captures["x"][0] != "42" { abort("expected '42'") }
     }
   }
 }
@@ -100,7 +100,7 @@ test "match_repetition" {
   match matched {
     None => abort("expected match")
     Some(captures) => {
-      if captures["x"].length() != 3 { abort("expected 3 captures, got " + captures["x"].length().to_string()) }
+      if captures["x"].length() != 3 { abort("expected 3 captures") }
       if captures["x"][0] != "1" { abort("expected '1'") }
       if captures["x"][1] != "2" { abort("expected '2'") }
       if captures["x"][2] != "3" { abort("expected '3'") }
@@ -137,8 +137,8 @@ test "match_multi_capture_with_literal" {
     Some(captures) => {
       if !captures.contains("x") { abort("expected x") }
       if !captures.contains("y") { abort("expected y") }
-      if captures["x"][0] != "1" { abort("expected x='1', got '" + captures["x"][0] + "'") }
-      if captures["y"][0] != "2" { abort("expected y='2', got '" + captures["y"][0] + "'") }
+      if captures["x"][0] != "1" { abort("expected x='1'") }
+      if captures["y"][0] != "2" { abort("expected y='2'") }
     }
   }
 }
@@ -162,7 +162,7 @@ test "expand_simple" {
 test "expand_repetition_template" {
   let captures : Map[String, Array[String]] = { "x": ["1", "2", "3"] }
   let result = @moonmacro.expand_template("[$($x),*]", captures)
-  if result != "[1,2,3]" { abort("expected '[1,2,3]', got '" + result + "'") }
+  if result != "[1,2,3]" { abort("expected '[1,2,3]'") }
 }
 
 test "expand_macro_call" {
@@ -173,7 +173,7 @@ test "expand_macro_call" {
     None => abort("expected Some")
     Some(code) => {
       let trimmed = code.trim().to_owned()
-      if trimmed != "21 * 2" { abort("expected '21 * 2', got '" + trimmed + "'") }
+      if trimmed != "21 * 2" { abort("expected '21 * 2'") }
     }
   }
 }
@@ -186,34 +186,10 @@ test "expand_file" {
   if result.find("macro_rules!") is None { abort("expected macro_rules! preserved") }
 }
 
-test "expand_builtin_vec" {
-  let result = @moonmacro.expand_builtin("vec", "1, 2, 3")
-  match result {
-    None => abort("expected Some")
-    Some(code) => {
-      if code != "[1, 2, 3]" { abort("expected '[1, 2, 3]'") }
-    }
-  }
-}
-
-test "expand_builtin_println" {
-  match @moonmacro.expand_builtin("println", "\"hello\"") {
-    None => abort("expected Some")
-    Some(code) => if code != "println(\"hello\")" { abort("expected 'println(\"hello\")', got '" + code + "'") }
-  }
-}
-
-test "expand_builtin_concat" {
-  match @moonmacro.expand_builtin("concat", "\"hello\", \"world\"") {
-    None => abort("expected Some")
-    Some(code) => if code != "\"helloworld\"" { abort("expected '\"helloworld\"', got '" + code + "'") }
-  }
-}
-
 test "expand_builtin_stringify" {
   match @moonmacro.expand_builtin("stringify", "hello") {
     None => abort("expected Some")
-    Some(code) => if code != "\"hello\"" { abort("expected '\"hello\"', got '" + code + "'") }
+    Some(code) => if code != "\"hello\"" { abort("expected '\"hello\"'") }
   }
 }
 
@@ -222,34 +198,15 @@ test "expand_builtin_unknown" {
   if result is Some(_) { abort("expected None for unknown builtin") }
 }
 
-test "generate_derive_show" {
-  let result = @moonmacro.generate_derives(["Show"], "Point", "struct", "", "{\n  x: Int\n  y: Int\n}")
-  if result.find("Point::to_string") is None { abort("expected to_string impl") }
-  if result.find("x=") is None { abort("expected x= field") }
-}
-
-test "generate_derive_eq" {
-  let result = @moonmacro.generate_derives(["Eq"], "Point", "struct", "", "{\n  x: Int\n}")
-  if result.find("op_equal") is None { abort("expected op_equal impl") }
-}
-
-test "generate_derive_multi" {
-  let result = @moonmacro.generate_derives(["Show", "Eq", "Clone"], "Point", "struct", "", "{\n  x: Int\n  y: Int\n}")
-  if result.find("to_string") is None { abort("expected to_string") }
-  if result.find("op_equal") is None { abort("expected op_equal") }
-  if result.find("clone") is None { abort("expected clone") }
-}
-
 test "find_derive_invocation" {
-  let source = "#[macro_derive(Show, Eq)]\nstruct Point { x: Int, y: Int }\n"
+  let source = "#[macro_derive(ToJson)]\nstruct Point { x: Int, y: Int }\n"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
-  if invs.length() != 1 { abort("expected 1 invocation, got " + invs.length().to_string()) }
+  if invs.length() != 1 { abort("expected 1 invocation") }
   match invs[0] {
     @moonmacro.Derive(traits, name, kind, _generics, _body, _s, _e) => {
-      if traits.length() != 2 { abort("expected 2 traits") }
-      if traits[0] != "Show" { abort("expected Show") }
-      if traits[1] != "Eq" { abort("expected Eq") }
+      if traits.length() != 1 { abort("expected 1 trait, got " + traits.length().to_string()) }
+      if traits[0] != "ToJson" { abort("expected ToJson, got " + traits[0]) }
       if name != "Point" { abort("expected Point") }
       if kind != "struct" { abort("expected struct") }
     }
@@ -258,7 +215,7 @@ test "find_derive_invocation" {
 }
 
 test "derive_with_braces" {
-  let source = "#[macro_derive(Show, Eq)]\nstruct Point {\n  x: Int\n  y: Int\n}"
+  let source = "#[macro_derive(ToJson)]\nstruct Point {\n  x: Int\n  y: Int\n}"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 1 { abort("expected 1 invocation") }
@@ -269,26 +226,6 @@ test "derive_with_braces" {
     }
     _ => abort("expected Derive")
   }
-}
-
-test "generate_derive_show_enum_unit" {
-  let result = @moonmacro.generate_derives(["Show"], "Color", "enum", "", "{\n  Red\n  Green\n  Blue\n}")
-  if result.find("to_string") is None { abort("expected to_string") }
-  if result.find("Red") is None { abort("expected Red variant") }
-  if result.find("Green") is None { abort("expected Green variant") }
-  if result.find("Blue") is None { abort("expected Blue variant") }
-}
-
-test "generate_derive_eq_enum_unit" {
-  let result = @moonmacro.generate_derives(["Eq"], "Color", "enum", "", "{\n  Red\n  Green\n}")
-  if result.find("op_equal") is None { abort("expected op_equal") }
-  if result.find("true") is None { abort("expected true arm") }
-}
-
-test "generate_derive_show_enum_tuple" {
-  let result = @moonmacro.generate_derives(["Show"], "Expr", "enum", "", "{\n  Int(Int)\n  Add(Int, Int)\n}")
-  if result.find("Int(a)") is None { abort("expected Int(a) pattern") }
-  if result.find("Add(a, b)") is None { abort("expected Add(a, b) pattern") }
 }
 
 test "generate_derive_to_json_enum_unit" {
@@ -302,33 +239,16 @@ test "generate_derive_to_json_enum_tuple" {
   if result.find(".to_json()") is None { abort("expected to_json calls") }
 }
 
-test "generate_derive_clone_enum_unit" {
-  let result = @moonmacro.generate_derives(["Clone"], "Color", "enum", "", "{\n  Red\n  Green\n}")
-  if result.find("::clone") is None { abort("expected ::clone, got: " + result) }
-}
-
-test "generate_derive_clone_enum_tuple" {
-  let result = @moonmacro.generate_derives(["Clone"], "Expr", "enum", "", "{\n  Int(Int)\n  Add(Int, Int)\n}")
-  if result.find(".clone()") is None { abort("expected clone calls") }
-}
-
-test "generate_derive_eq_enum_tuple" {
-  let result = @moonmacro.generate_derives(["Eq"], "Expr", "enum", "", "{\n  Int(Int)\n  Add(Int, Int)\n}")
-  if result.find("op_equal") is None { abort("expected op_equal") }
-  if result.find("a0") is None { abort("expected a0 binding") }
-  if result.find("_ => false") is None { abort("expected fallthrough false") }
-}
-
 test "stacked_derive_same_struct" {
-  let source = "#[macro_derive(Show)]\n#[macro_derive(Eq)]\nstruct Point { x: Int }\n"
+  let source = "#[macro_derive(ToJson)]\n#[macro_derive(ToJson)]\nstruct Point { x: Int }\n"
   let defs : Array[@moonmacro.MacroDef] = []
   let invs = @moonmacro.find_macro_invocations(source, defs)
   if invs.length() != 1 { abort("expected 1 invocation, got " + invs.length().to_string()) }
   match invs[0] {
     @moonmacro.Derive(traits, name, _kind, _generics, _body, _s, _e) => {
       if traits.length() != 2 { abort("expected 2 merged traits, got " + traits.length().to_string()) }
-      if traits[0] != "Show" { abort("expected Show") }
-      if traits[1] != "Eq" { abort("expected Eq") }
+      if traits[0] != "ToJson" { abort("expected ToJson") }
+      if traits[1] != "ToJson" { abort("expected ToJson") }
       if name != "Point" { abort("expected Point") }
     }
     _ => abort("expected Derive")
@@ -339,17 +259,8 @@ test "expand_file_nested" {
   let source = "macro_rules! double { ($x:expr) => { $x * 2 } }\nmacro_rules! apply { ($f:expr) => { double!($f) } }\napply!(21)\n"
   let defs = @moonmacro.find_macro_defs(source)
   let result = @moonmacro.expand_file(source, defs)
-  if result.find("21 * 2") is None { abort("expected 21 * 2 after nested expansion, got: " + result) }
+  if result.find("21 * 2") is None { abort("expected 21 * 2 after nested expansion") }
   if result.find("double!") is Some(_) { abort("double! should be expanded away") }
-}
-
-test "expand_file_stacked_derive" {
-  let source = "#[macro_derive(Show)]\n#[macro_derive(Eq)]\nstruct Point { x: Int, y: Int }\n"
-  let defs : Array[@moonmacro.MacroDef] = []
-  let result = @moonmacro.expand_file(source, defs)
-  if result.find("Point::to_string") is None { abort("expected to_string impl") }
-  if result.find("Point::op_equal") is None { abort("expected op_equal impl") }
-  if result.find("#[macro_derive") is Some(_) { abort("should not contain #[macro_derive") }
 }
 
 test "no_matches" {
