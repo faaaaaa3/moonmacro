@@ -80,6 +80,15 @@ fn demo_walkthrough() -> Unit {
   let r9 = @moonmacro.expand_file(src9, @moonmacro.find_macro_defs(src9))
   println("Output:")
   println(@moonmacro.strip_macro_defs(r9))
+  println("")
+
+  println("=== 10. let_array! ===\n")
+  let src10 = parts[9]
+  println("Input:")
+  println(src10)
+  let r10 = @moonmacro.expand_file(src10, @moonmacro.find_macro_defs(src10))
+  println("Output:")
+  println(@moonmacro.strip_macro_defs(r10))
 }
 
 fn demo_parts() -> Array[String] {
@@ -93,5 +102,6 @@ fn demo_parts() -> Array[String] {
     "let s = stringify!(hello world)\n",
     "assert!(x > 0)\n",
     "fn main {\n  let x = 42\n  let y = dbg!(x + 1)\n  println(y.to_string())\n}\n",
+    "let_array!(mut a, mut b, c = state, start: 1)\n",
   ]
 }

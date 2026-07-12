@@ -509,3 +509,67 @@ test "expand_file_no_change" {
   let result = @moonmacro.expand_file(source, defs)
   if result != source { abort("plain code should be unchanged") }
 }
+
+test "expand_builtin_let_array_simple" {
+  match @moonmacro.expand_builtin("let_array", "a, b, c = arr") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "let a = arr[0]; let b = arr[1]; let c = arr[2]" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_let_array_mut" {
+  match @moonmacro.expand_builtin("let_array", "mut a, mut b = state") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "let mut a = state[0]; let mut b = state[1]" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_let_array_mixed_mut" {
+  match @moonmacro.expand_builtin("let_array", "mut a, b, mut c = data") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "let mut a = data[0]; let b = data[1]; let mut c = data[2]" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_let_array_with_start" {
+  match @moonmacro.expand_builtin("let_array", "a, b = items, start: 3") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "let a = items[3]; let b = items[4]" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_let_array_single_var" {
+  match @moonmacro.expand_builtin("let_array", "x = get_array()") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "let x = get_array()[0]" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_let_array_no_eq" {
+  let result = @moonmacro.expand_builtin("let_array", "a, b, c")
+  if result is Some(_) { abort("expected None without =") }
+}
+
+test "expand_builtin_let_array_no_vars" {
+  let result = @moonmacro.expand_builtin("let_array", " = arr")
+  if result is Some(_) { abort("expected None without vars") }
+}
+
+test "expand_builtin_let_array_start_zero" {
+  match @moonmacro.expand_builtin("let_array", "a, b = xs, start: 0") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "let a = xs[0]; let b = xs[1]" { abort("unexpected: " + code) }
+    }
+  }
+}

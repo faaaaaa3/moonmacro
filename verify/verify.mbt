@@ -218,3 +218,37 @@ test "verify_builtin_dbg_nested_parens" {
   if result.find("let __dbg_val = foo(1, 2)") is None { abort("expected nested parens, got: " + result) }
   if result.find("\"foo(1, 2)\"") is None { abort("expected quoted expr text") }
 }
+
+test "verify_builtin_let_array_simple" {
+  let source = "let_array!(a, b, c = arr)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("let a = arr[0]") is None { abort("expected let a = arr[0], got: " + result) }
+  if result.find("let b = arr[1]") is None { abort("expected let b = arr[1]") }
+  if result.find("let c = arr[2]") is None { abort("expected let c = arr[2]") }
+}
+
+test "verify_builtin_let_array_mut" {
+  let source = "let_array!(mut x, mut y = state)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("let mut x = state[0]") is None { abort("expected let mut x = state[0], got: " + result) }
+  if result.find("let mut y = state[1]") is None { abort("expected let mut y = state[1]") }
+}
+
+test "verify_builtin_let_array_start" {
+  let source = "let_array!(a, b, c = items, start: 5)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("let a = items[5]") is None { abort("expected let a = items[5], got: " + result) }
+  if result.find("let b = items[6]") is None { abort("expected let b = items[6]") }
+  if result.find("let c = items[7]") is None { abort("expected let c = items[7]") }
+}
+
+test "verify_builtin_let_array_brackets" {
+  let source = "let_array!(a, b = get_arr())"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("let a = get_arr()[0]") is None { abort("expected bracket expr, got: " + result) }
+  if result.find("let b = get_arr()[1]") is None { abort("expected let b = get_arr()[1]") }
+}
