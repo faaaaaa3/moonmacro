@@ -573,3 +573,73 @@ test "expand_builtin_let_array_start_zero" {
     }
   }
 }
+
+test "expand_builtin_call_each_simple" {
+  match @moonmacro.expand_builtin("call_each", "m.add, a, b, bc") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "m.add(a); m.add(b); m.add(bc)" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_call_each_quoted_args" {
+  let args = "m.add, \"a\", \"b\", \"bc\""
+  match @moonmacro.expand_builtin("call_each", args) {
+    None => abort("expected Some")
+    Some(code) => {
+      let expected = "m.add(\"a\"); m.add(\"b\"); m.add(\"bc\")"
+      if code != expected { abort("unexpected: " + code + " expected: " + expected) }
+    }
+  }
+}
+
+test "expand_builtin_call_each_single_arg" {
+  match @moonmacro.expand_builtin("call_each", "f, x") {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "f(x)" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_call_each_no_args" {
+  let result = @moonmacro.expand_builtin("call_each", "f")
+  if result is Some(_) { abort("expected None without comma") }
+}
+
+test "expand_builtin_call_each_empty_args" {
+  let result = @moonmacro.expand_builtin("call_each", "f,  ")
+  if result is Some(_) { abort("expected None with only whitespace args") }
+}
+
+test "expand_builtin_call_each_multi_arg" {
+  let args = "map.insert, (\"k1\", 1), (\"k2\", 2)"
+  match @moonmacro.expand_builtin("call_each", args) {
+    None => abort("expected Some")
+    Some(code) => {
+      let expected = "map.insert(\"k1\", 1); map.insert(\"k2\", 2)"
+      if code != expected { abort("unexpected: " + code + " expected: " + expected) }
+    }
+  }
+}
+
+test "expand_builtin_call_each_mixed_arity" {
+  let args = "f, a, (b, c), d"
+  match @moonmacro.expand_builtin("call_each", args) {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "f(a); f(b, c); f(d)" { abort("unexpected: " + code) }
+    }
+  }
+}
+
+test "expand_builtin_call_each_triple_arg" {
+  let args = "f, (1, 2, 3), (4, 5, 6)"
+  match @moonmacro.expand_builtin("call_each", args) {
+    None => abort("expected Some")
+    Some(code) => {
+      if code != "f(1, 2, 3); f(4, 5, 6)" { abort("unexpected: " + code) }
+    }
+  }
+}

@@ -252,3 +252,38 @@ test "verify_builtin_let_array_brackets" {
   if result.find("let a = get_arr()[0]") is None { abort("expected bracket expr, got: " + result) }
   if result.find("let b = get_arr()[1]") is None { abort("expected let b = get_arr()[1]") }
 }
+
+test "verify_builtin_call_each_simple" {
+  let source = "call_each!(m.add, \"a\", \"b\", \"bc\")"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("m.add(\"a\")") is None { abort("expected m.add(\"a\"), got: " + result) }
+  if result.find("m.add(\"b\")") is None { abort("expected m.add(\"b\")") }
+  if result.find("m.add(\"bc\")") is None { abort("expected m.add(\"bc\")") }
+}
+
+test "verify_builtin_call_each_dotted" {
+  let source = "call_each!(m.add, 1, 2, 3)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("m.add(1)") is None { abort("expected m.add(1), got: " + result) }
+  if result.find("m.add(2)") is None { abort("expected m.add(2)") }
+  if result.find("m.add(3)") is None { abort("expected m.add(3)") }
+}
+
+test "verify_builtin_call_each_multi_arg" {
+  let source = "call_each!(map.insert, (\"k1\", 1), (\"k2\", 2))"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("map.insert(\"k1\", 1)") is None { abort("expected map.insert(k1,1), got: " + result) }
+  if result.find("map.insert(\"k2\", 2)") is None { abort("expected map.insert(k2,2)") }
+}
+
+test "verify_builtin_call_each_mixed_arity" {
+  let source = "call_each!(f, a, (b, c), d)"
+  let defs : Array[@moonmacro.MacroDef] = []
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("f(a)") is None { abort("expected f(a), got: " + result) }
+  if result.find("f(b, c)") is None { abort("expected f(b, c)") }
+  if result.find("f(d)") is None { abort("expected f(d)") }
+}

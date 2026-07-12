@@ -16,6 +16,7 @@ pub fn expand_builtin(name : String, args : String) -> String? {
     }
     "dbg" => Some("{ let __dbg_val = " + args + "; println(\"[dbg] \" + stringify!(" + args + ") + \" = \" + __dbg_val.to_string()); __dbg_val }")
     "let_array" => expand_let_array(args)
+    "call_each" => expand_call_each(args)
     _ => None
   }
 }
@@ -154,6 +155,63 @@ fn skip_ws_from(s : String, from : Int) -> Int {
     pos = pos + 1
   }
   pos
+}
+
+fn expand_call_each(args : String) -> String? {
+  let split = split_at_top_level_comma(args)
+  match split {
+    None => None
+    Some((prefix, rest)) => {
+      let p = prefix
+      let r = rest
+      if p.length() == 0 || r.length() == 0 { return None }
+      let arg_parts = split_all_top_level_commas(r)
+      let result = StringBuilder()
+      let mut count = 0
+      for i in 0..<arg_parts.length() {
+        let a = arg_parts[i].trim().to_owned()
+        if a.length() == 0 { continue }
+        if count > 0 { result.write_string("; ") }
+        result.write_string(p)
+        result.write_string("(")
+        if a.has_prefix("(") && ends_with_paren(a) {
+          result.write_string(a[1:a.length() - 1].to_owned())
+        } else {
+          result.write_string(a)
+        }
+        result.write_string(")")
+        count = count + 1
+      }
+      if count == 0 { None } else { Some(result.to_string()) }
+    }
+  }
+}
+
+fn ends_with_paren(s : String) -> Bool {
+  let len = s.length()
+  len > 0 && s[len - 1] == (')' : UInt16)
+}
+
+fn split_all_top_level_commas(s : String) -> Array[String] {
+  let parts : Array[String] = []
+  let mut depth = 0
+  let mut start = 0
+  let mut pos = 0
+  let len = s.length()
+  while pos < len {
+    let c = s[pos]
+    if c == ('(' : UInt16) || c == ('<' : UInt16) || c == ('[' : UInt16) || c == ('{' : UInt16) {
+      depth = depth + 1
+    } else if c == (')' : UInt16) || c == ('>' : UInt16) || c == (']' : UInt16) || c == ('}' : UInt16) {
+      depth = depth - 1
+    } else if c == (',' : UInt16) && depth == 0 {
+      parts.push(s[start:pos].to_owned())
+      start = pos + 1
+    }
+    pos = pos + 1
+  }
+  if start < len { parts.push(s[start:].to_owned()) }
+  parts
 }
 
 fn split_at_top_level_comma(s : String) -> (String, String)? {
