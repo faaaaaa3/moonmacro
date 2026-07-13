@@ -8,6 +8,11 @@ pub(all) struct MacroRule {
   template : String
 }
 
+pub(all) struct DeriveDef {
+  name : String
+  template : String
+}
+
 pub(all) enum MacroInvocation {
   FuncCall(String, String, String, Int, Int)
   Derive(Array[String], String, String, String, String, Int, Int)
@@ -27,11 +32,43 @@ pub fn invocation_end(inv : MacroInvocation) -> Int {
   }
 }
 
+fn skip_non_code(s : String, start : Int) -> Int {
+  let mut pos = start
+  let len = s.length()
+  while pos < len {
+    // line comment
+    if pos + 1 < len && s[pos] == ('/' : UInt16) && s[pos + 1] == ('/' : UInt16) {
+      while pos < len && s[pos] != ('\n' : UInt16) { pos = pos + 1 }
+      continue
+    }
+    // multi-line string #| ... |#
+    if pos + 1 < len && s[pos] == ('#' : UInt16) && s[pos + 1] == ('|' : UInt16) {
+      pos = pos + 2
+      while pos + 1 < len && !(s[pos] == ('|' : UInt16) && s[pos + 1] == ('#' : UInt16)) { pos = pos + 1 }
+      if pos + 1 < len { pos = pos + 2 }
+      continue
+    }
+    // multi-line string $| ... |#
+    if pos + 1 < len && s[pos] == ('$' : UInt16) && s[pos + 1] == ('|' : UInt16) {
+      pos = pos + 2
+      while pos + 1 < len && !(s[pos] == ('|' : UInt16) && s[pos + 1] == ('#' : UInt16)) { pos = pos + 1 }
+      if pos + 1 < len { pos = pos + 2 }
+      continue
+    }
+    // single-line string
+    if s[pos] == ('"' : UInt16) { pos = skip_string(s, pos); continue }
+    break
+  }
+  pos
+}
+
 pub fn find_macro_defs(source : String) -> Array[MacroDef] {
   let defs : Array[MacroDef] = []
   let mut pos : Int = 0
   let len = source.length()
   while pos < len {
+    pos = skip_non_code(source, pos)
+    if pos >= len { break }
     if is_at(source, pos, "macro_rules!") {
       pos = pos + "macro_rules!".length()
       pos = skip_ws(source, pos)
@@ -49,11 +86,40 @@ pub fn find_macro_defs(source : String) -> Array[MacroDef] {
   defs
 }
 
+pub fn find_derive_defs(source : String) -> Array[DeriveDef] {
+  let defs : Array[DeriveDef] = []
+  let mut pos : Int = 0
+  let len = source.length()
+  while pos < len {
+    pos = skip_non_code(source, pos)
+    if pos >= len { break }
+    if is_at(source, pos, "macro_derive!") {
+      pos = pos + "macro_derive!".length()
+      pos = skip_ws(source, pos)
+      let name_res = read_ident(source, pos)
+      if name_res.0 == "" { pos = pos + 1; continue }
+      pos = name_res.1
+      pos = skip_ws(source, pos)
+      let body_res = read_balanced(source, pos)
+      pos = body_res.1
+      let tmpl_body = body_res.0
+      if tmpl_body.length() >= 2 {
+        defs.push({ name: name_res.0, template: tmpl_body[1:tmpl_body.length() - 1].to_owned() })
+      }
+    } else {
+      pos = pos + 1
+    }
+  }
+  defs
+}
+
 pub fn find_macro_invocations(source : String, _defs : Array[MacroDef]) -> Array[MacroInvocation] {
   let invs : Array[MacroInvocation] = []
   let mut pos : Int = 0
   let len = source.length()
   while pos < len {
+    pos = skip_non_code(source, pos)
+    if pos >= len { break }
     if is_at(source, pos, "#[macro_derive(") {
       let derive_start = pos
       let all_traits = collect_derive_traits(source, pos)
@@ -125,6 +191,60 @@ fn parse_comma_list(s : String) -> Array[String] {
     if last.length() > 0 { result.push(last) }
   }
   result
+}
+
+fn derive_field_names(body : String) -> String {
+  let fields = parse_struct_fields(body)
+  fields.map(fn(f) { f.0 }).join(", ")
+}
+
+fn derive_field_types(body : String) -> String {
+  let fields = parse_struct_fields(body)
+  fields.map(fn(f) { f.1 }).join(", ")
+}
+
+fn derive_variant_names(body : String) -> String {
+  let variants = parse_enum_variants(body)
+  variants.map(fn(v) { v.name }).join(", ")
+}
+
+fn derive_enum_field_types(body : String) -> String {
+  let variants = parse_enum_variants(body)
+  let all_types : Array[String] = []
+  for v in variants {
+    for t in v.field_types {
+      all_types.push(t)
+    }
+  }
+  all_types.join(", ")
+}
+
+
+pub fn expand_derive_template(template : String, type_name : String, kind : String, generics : String, body : String) -> String {
+  let field_names = if kind == "struct" { derive_field_names(body) } else { "" }
+  let field_types = if kind == "enum" { derive_enum_field_types(body) } else if kind == "struct" { derive_field_types(body) } else { "" }
+  let variant_names = if kind == "enum" { derive_variant_names(body) } else { "" }
+  let result = StringBuilder()
+  let mut pos : Int = 0
+  let len = template.length()
+  while pos < len {
+    if template[pos] == ('$' : UInt16) {
+      if is_at(template, pos, "$T") { result.write_string(type_name); pos = pos + 2 }
+      else if is_at(template, pos, "$type") { result.write_string(type_name); pos = pos + 5 }
+      else if is_at(template, pos, "$body") { result.write_string(body); pos = pos + 5 }
+      else if is_at(template, pos, "$kind") { result.write_string(kind); pos = pos + 5 }
+      else if is_at(template, pos, "$generics") { result.write_string(generics); pos = pos + 9 }
+      else if is_at(template, pos, "$Name") { result.write_string(pascal_case(type_name)); pos = pos + 5 }
+      else if is_at(template, pos, "$fields") { result.write_string(field_names); pos = pos + 7 }
+      else if is_at(template, pos, "$field_types") { result.write_string(field_types); pos = pos + 12 }
+      else if is_at(template, pos, "$variants") { result.write_string(variant_names); pos = pos + 9 }
+      else { result.write_char(('$' : UInt16).to_int().unsafe_to_char()); pos = pos + 1 }
+    } else {
+      result.write_char(template[pos].to_int().unsafe_to_char())
+      pos = pos + 1
+    }
+  }
+  result.to_string()
 }
 
 pub fn expand_macro_call(name : String, args : String, defs : Array[MacroDef]) -> String? {

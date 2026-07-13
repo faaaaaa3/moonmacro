@@ -1,18 +1,18 @@
 pub fn expand_builtin(name : String, args : String) -> String? {
   match name {
-    "assert" => Some("if !(" + args + ") { abort(\"assertion failed: " + args + "\") }")
+    "assert" => Some("if !(" + args + ") { println(\"assertion failed: " + args + "\"); abort(\"\") }")
     "stringify" => Some("\"" + args + "\"")
     "matches" => {
       let split = split_at_top_level_comma(args)
       match split {
-        Some((expr, pat)) => Some("match " + expr + " { " + pat + " => true, _ => false }")
+        Some((expr, pat)) => Some("match " + expr + " { " + pat + " => true; _ => false }")
         None => None
       }
     }
     "todo" => {
       let msg = args.trim().to_owned()
-      if msg.length() > 0 { Some("abort(" + msg + ")") }
-      else { Some("abort(\"not implemented\")") }
+      if msg.length() > 0 { Some("println(" + msg + "); abort(\"\")") }
+      else { Some("println(\"not implemented\"); abort(\"\")") }
     }
     "dbg" => Some("{ let __dbg_val = " + args + "; println(\"[dbg] \" + stringify!(" + args + ") + \" = \" + __dbg_val.to_string()); __dbg_val }")
     "let_array" => expand_let_array(args)
@@ -179,6 +179,18 @@ fn expand_call_each(args : String) -> String? {
       let r = rest
       if p.length() == 0 || r.length() == 0 { return None }
       let arg_parts = split_all_top_level_commas(r)
+      let mut has_tuple = false
+      let mut has_single = false
+      for i in 0..<arg_parts.length() {
+        let a = arg_parts[i].trim().to_owned()
+        if a.length() == 0 { continue }
+        if a.has_prefix("(") && ends_with_paren(a) {
+          has_tuple = true
+        } else {
+          has_single = true
+        }
+      }
+      if has_tuple && has_single { return None }
       let result = StringBuilder()
       let mut count = 0
       for i in 0..<arg_parts.length() {

@@ -2,153 +2,153 @@
 
 MoonMacro 是一个面向 MoonBit 语言的构建时宏系统（编译期预处理器），
 提供声明式 `macro_rules!` 宏定义、模式匹配展开、
-`#[macro_derive]` 自动派生以及一系列内置实用宏。
+`#[macro_derive]` 自动派生以及 13 个内置实用宏。
 
-**版本**: 0.1.0
-**许可证**: MIT
-**模块路径**: faaaaaa3/moonmacro
+**版本**: 0.2.0 / **许可证**: MIT / **模块路径**: `faaaaaa3/moonmacro`
+
+[GitHub](https://github.com/faaaaaa3/moonmacro) · [Mooncakes](https://mooncakes.io/docs/faaaaaa3/moonmacro)
 
 
-## 1. 概述与设计思想
+## 1. 安装与使用
 
-### 1.1 什么是构建时宏？
+### 1.1 安装
 
-构建时宏是在代码编译之前执行代码变换的程序。与运行时函数调用不同，宏在构建阶段展开，可以：
+**前置要求**: 需安装 [MoonBit 工具链](https://www.moonbitlang.com/download/)。
 
-- **生成重复代码**: 避免手写样板代码
-- **实现 DSL**: 创建自定义语法
-- **条件编译**: 根据条件包含或排除代码
-- **自动派生**: 为类型自动实现 trait
+```bash
+git clone https://github.com/faaaaaa3/moonmacro
+cd moonmacro
 
-### 1.2 设计原则
+# 一键构建并安装到 ~/.local/bin/
+./moonmacro.sh install
+```
 
-1. **纯文本预处理**: 不依赖 MoonBit 解析器或 AST
-2. **零外部依赖**: 只使用 MoonBit 标准库
-3. **声明式宏**: 采用类似 Rust macro_rules! 的模式匹配语法
-4. **即插即用**: 内置宏无需导入即可使用
+安装后 `~/.local/bin/` 中有两个文件：
 
----
+| 文件 | 用途 |
+|------|------|
+| `mmprocess` | 核心二进制，展开宏 |
+| `moonmacro.sh` | 批量预处理脚本 |
 
-## 2. 快速开始
+确保 `~/.local/bin/` 在 `PATH` 中即可全局使用。
 
-### 2.1 添加依赖
+### 1.2 mmprocess（核心二进制）
 
-在 `moon.mod.json` 中添加 moonmacro 依赖：
+```bash
+mmprocess --demo                       # 运行 27 部分演示
+mmprocess "source code here"           # 展开单段源文本
+mmprocess < input.mbt.macro > out.mbt  # 从 stdin 读取
+```
+
+### 1.3 moonmacro.sh（批量预处理）
+
+自动查找目录中所有 `.mbt.macro` 文件（递归处理所有子目录）并展开为 `.mbt`：
+
+```bash
+moonmacro.sh src/                      # 处理整个目录
+moonmacro.sh src/main.mbt.macro        # 处理单个文件
+moonmacro.sh                           # 默认处理当前目录
+```
+
+### 1.4 构建系统集成
+
+在 Makefile 中添加预处理步骤：
+
+```makefile
+preprocess:
+    moonmacro.sh src/
+build: preprocess
+    moon build
+```
+
+### 1.5 作为库依赖
+
+在 `moon.mod.json` 中添加：
 
 ```json
 {
   "import": {
-    "faaaaaa3/moonmacro": "0.1.2"
+    "faaaaaa3/moonmacro": "0.2.0"
   }
 }
 ```
 
-### 2.2 完整示例
 
-以下示例展示了 MoonMacro 的核心功能：用户宏、内置宏和派生宏。
+## 2. 工作流程
+
+项目中用 `.mbt.macro` 文件编写含宏的代码，预处理后展开为纯 `.mbt`：
+
+```
+项目/
+  src/
+    main.mbt.macro     # 含 macro_rules! 和 #[macro_derive]
+    lib.mbt.macro
+    utils.mbt          # 纯 MoonBit，无需预处理
+
+步骤:
+  1. 编写 .mbt.macro 文件
+  2. moonmacro.sh src/
+  3. .mbt.macro → .mbt（宏已展开）
+  4. moon build
+```
+
+**完整示例**（保存为 `main.mbt.macro`，运行 `moonmacro.sh . && moon run src/main.mbt`）：
 
 ```moonbit
-// 用户宏
 macro_rules! greet {
   ($name:expr) => {
     fn greet_$name() -> String { "Hello, $name!" }
   }
 }
-macro_rules! make_tuple {
-  ($($item:expr),*) => { ($($item),*) }
-}
+
 greet!(World)
-let tup = make_tuple!(1, 2, 3)
 
-// 内置宏
-assert!(x > 0)
-let s = stringify!(hello world)
-let result = todo!("not yet implemented")
-let matched = matches!(x, Some(v))
-let val = dbg!(compute())
-
-// 派生宏
 #[macro_derive(Constructor, Getters)]
-struct Point {
-  x: Int
-  y: Int
+struct Point { x: Int; y: Int }
+
+fn main {
+  let p = Point::new(1, 2)
+  println("\{p.x()}, \{p.y()}")
+  println(greet_World())
 }
-
-#[macro_derive(EnumFromStr)]
-enum Color { Red; Green; Blue }
 ```
 
----
+预处理后展开为：
 
-## 3. 作为构建时预处理器使用
+```moonbit
+fn greet_World() -> String { "Hello, World!" }
 
-### 3.1 工作流程
+struct Point { x: Int; y: Int }
 
-MoonMacro 的核心定位是构建时预处理器。在 MoonBit 项目中先用 `.mbt.macro` 文件编写代码，然后通过预处理器展开为纯 `.mbt` 文件。
+pub fn Point::new(x: Int, y: Int) -> Point { { x, y } }
+pub fn Point::x(self: Point) -> Int { self.x }
+pub fn Point::y(self: Point) -> Int { self.y }
 
-```
-你的 MoonBit 项目/
-  src/
-    main.mbt.macro     # 含 macro_rules! 和 #[macro_derive]
-    lib.mbt.macro      # 混合宏调用和普通代码
-    utils.mbt          # 纯 MoonBit 文件，无需预处理
-
-步骤:
-  1. 编写 .mbt.macro 文件
-  2. 运行: ./moonmacro.sh src/
-  3. .mbt.macro 文件变为纯 .mbt 文件
-  4. 运行 moon build
-```
-
-### 3.2 文件命名约定
-
-| 扩展名 | 说明 |
-|---------|------|
-| `.mbt.macro` | 需要预处理的源文件 |
-| `.mbt` | 纯 MoonBit 源码 |
-| `.mbt.macro` -> `.mbt` | 预处理后去除 `.macro` 后缀 |
-
-### 3.3 moonmacro.sh 脚本
-
-`moonmacro.sh` 自动查找目录中的 `.mbt.macro` 文件并调用 `mmprocess` 展开：
-
-```bash
-./moonmacro.sh src/               # 处理整个目录
-./moonmacro.sh src/main.mbt.macro  # 处理单个文件
-./moonmacro.sh                     # 默认处理当前目录
-```
-
-### 3.4 与构建系统集成
-
-将 `moonmacro.sh` 复制到项目或创建软链接，然后在 Makefile 中添加预处理步骤：
-
-```makefile
-MMROOT = /path/to/moonmacro
-preprocess:
-    $(MMROOT)/moonmacro.sh src/
-build: preprocess
-    moon build
-.PHONY: preprocess build
+fn main {
+  let p = Point::new(1, 2)
+  println("\{p.x()}, \{p.y()}")
+  println(greet_World())
+}
 ```
 
 
-## 5. 内置宏
+## 3. 内置宏
 
-MoonMacro 提供 9 个内置宏，无需手动导入。在用户定义宏匹配失败后自动尝试内置宏。
+无需导入即可使用。在用户定义宏匹配失败后自动尝试内置宏。
 
-### 5.1 assert!
+### 3.1 assert!
 
 生成带错误消息的断言：
 
 ```moonbit
 assert!(x > 0)
-// -> if !(x > 0) { abort("assertion failed: x > 0") }
+// -> if !(x > 0) { println("assertion failed: x > 0"); abort("") }
 
 assert!(x > 0 && y < 10)
-// -> if !(x > 0 && y < 10) { abort("assertion failed: x > 0 && y < 10") }
+// -> if !(x > 0 && y < 10) { println("assertion failed: x > 0 && y < 10"); abort("") }
 ```
 
-### 5.2 stringify!
+### 3.2 stringify!
 
 将参数文本原样字面量化为字符串：
 
@@ -157,30 +157,30 @@ let s = stringify!(hello world)  // -> let s = "hello world"
 let op = stringify!(x + y)       // -> let op = "x + y"
 ```
 
-### 5.3 matches!
+### 3.3 matches!
 
-模式匹配表达式，返回 `Bool`：
+模式匹配表达式，返回 `Bool`；表达式与模式类型必须兼容（同 MoonBit `match` 规则）：
 
 ```moonbit
 let b = matches!(result, Ok(val))
-// -> let b = match result { Ok(val) => true, _ => false }
+// -> let b = match result { Ok(val) => true; _ => false }
 ```
 
 参数用逗号分隔：第一个是表达式，第二个是模式。
 
-### 5.4 todo!
+### 3.4 todo!
 
 占位宏，标记未完成的代码：
 
 ```moonbit
 fn unimplemented() -> Int {
-  todo!()  // -> abort("not implemented")
+  todo!()  // -> println("not implemented"); abort("")
 }
 
-todo!("fix this later")  // -> abort("fix this later")
+todo!("fix this later")  // -> println("fix this later"); abort("")
 ```
 
-### 5.5 dbg!
+### 3.5 dbg!
 
 调试宏：输出 `[dbg] 表达式 = 值`，并返回该值。
 
@@ -201,9 +201,7 @@ fn main {
 // 运行时输出: [dbg] x + 1 = 42
 ```
 
-`dbg!` 通过多轮展开实现：首轮生成包含 `stringify!` 的代码，次轮展开 `stringify!` 得到带引号的表达式文本。
-
-### 5.6 let_array!
+### 3.6 let_array!
 
 将数组元素展开为多个 `let` 绑定，避免重复手写 `let a = arr[0]; let b = arr[1]` 等代码。支持 `mut` 前缀和起始位置偏移。
 
@@ -221,7 +219,7 @@ let_array!(a, b, c = items, start: 5)
 // -> let a = items[5]; let b = items[6]; let c = items[7]
 ```
 
-### 5.7 repeat!
+### 3.7 repeat!
 
 重复生成某个表达式多次，用指定分隔符连接，避免手动重复书写相同代码。
 
@@ -244,7 +242,7 @@ repeat!(x, 3, ; )
 2. 重复次数（必须 ≥ 1）
 3. 分隔符（可选，默认为 `, `）
 
-### 5.8 call_each!
+### 3.8 call_each!
 
 批量调用同一个方法，避免重复手写 `m.add("a"); m.add("b"); m.add("bc")` 等代码。支持单参数和多参数两种模式。
 
@@ -268,14 +266,7 @@ call_each!(f, (1, 2, 3), (4, 5, 6))
 // -> f(1, 2, 3); f(4, 5, 6)
 ```
 
-**混合模式**：单参数与多参数可以混用。
-
-```moonbit
-call_each!(f, a, (b, c), d)
-// -> f(a); f(b, c); f(d)
-```
-
-### 5.9 inspect!
+### 3.9 inspect!
 
 `inspect!(expr, "expected")` 是 `@debug.debug_inspect(expr, content="expected")` 的简写，用于测试断言。
 
@@ -291,14 +282,127 @@ inspect!(m.get("C"), "Some(1)")
 1. 要检查的表达式
 2. 期望值（字符串字面量或表达式），自动作为 `content` 命名参数传入
 
+### 3.10 echo!
+
+`echo!(varname, ...)` 展开为 `println("varname1 = \{varname1}, varname2 = \{varname2}, ...")`，用于调试时快速打印多个变量名和值。
+
+```moonbit
+let x = 42
+let y = "hello"
+echo!(x, y)
+// -> println("x = \{x}, y = \{y}")
+// Output: x = 42, y = hello
+```
+
+**参数**: 一个或多个变量名，逗号分隔
+
+### 3.11 logger!
+
+`logger!(fn funcName(...) -> ReturnType { body })` 在函数体开头插入 `defer` 和日志打印：
+
+```moonbit
+logger!(fn add(x: Int, y: Int) -> Int {
+  x + y
+})
+// → fn add(x: Int, y: Int) -> Int {
+//     defer { println("leaving add") }
+//     println("entering add")
+//     x + y
+//   }
+```
+
+`defer` 保证离开日志在函数退出时执行，不影响返回值。
+
+### 3.12 timeit!
+
+`timeit!(fn funcName(...) -> ReturnType { body })` 测量函数执行耗时：
+
+```moonbit
+timeit!(fn compute() -> Int {
+  99
+})
+// → fn compute() -> Int {
+//     let __timeit_start = @env.now()
+//     defer { println("compute took " + (@env.now() - __timeit_start).to_string() + "ms") }
+//     99
+//   }
+```
+
+### 3.13 tryn!
+
+`tryn!(expr, n)` 尝试执行表达式 `expr` 最多 `n` 次，返回第一个 `Some(val)`；若全部失败则返回 `None`：
+
+```moonbit
+tryn!(read_line(), 3)
+// → {
+//     let __tryn_max = 3
+//     let mut __tryn_i = 0
+//     let __tryn_val = loop {
+//       if __tryn_i >= __tryn_max { break None }
+//       __tryn_i = __tryn_i + 1
+//       let __tryn_cur = read_line()
+//       if __tryn_cur is Some(_) { break __tryn_cur }
+//     }
+//     __tryn_val
+//   }
+```
+
 ---
 
-## 6. 自动派生 #[macro_derive]
+## 4. 用户宏（macro_rules!）
+
+### 4.1 基本语法
+
+```moonbit
+macro_rules! 宏名 {
+  (模式1) => { 模板1 }
+  (模式2) => { 模板2 }
+}
+```
+
+模式支持 `$变量名:类型` 捕获和 `$($inner),*` 重复。
+
+### 4.2 简单示例
+
+```moonbit
+macro_rules! greet {
+  ($name:expr) => {
+    fn greet_$name() -> String { "Hello, $name!" }
+  }
+}
+greet!(World)
+// → fn greet_World() -> String { "Hello, World!" }
+```
+
+### 4.3 重复匹配
+
+```moonbit
+macro_rules! make_tuple {
+  ($($item:expr),*) => { ($($item),*) }
+}
+let tup = make_tuple!(1, 2, 3)
+// → let tup = (1, 2, 3)
+```
+
+### 4.4 嵌套展开
+
+宏展开支持嵌套：一轮展开产生新的宏调用，下一轮继续展开，最多 10 轮。
+
+```moonbit
+macro_rules! double { ($x:expr) => { $x * 2 } }
+macro_rules! apply { ($f:expr) => { double!($f) } }
+let result = apply!(21)
+// → let result = 21 * 2
+```
+
+---
+
+## 5. 自动派生 #[macro_derive]
 
 `#[macro_derive(Trait1, Trait2)]` 为 struct 或 enum 自动生成 trait 实现代码。
 多个 trait 可以放在同一个 `#[macro_derive(...)]` 中，也可以用连续多行堆叠。
 
-### 6.1 Constructor
+### 5.1 Constructor
 
 为 struct 生成 `new()` 构造函数。**仅支持 struct**，至少需要一个字段。
 
@@ -314,10 +418,9 @@ struct Point {
 
 
 
-### 6.2 Getters
+### 5.2 Getters
 
-为 struct 生成 PascalCase 命名的 getter 方法。**仅支持 struct**，至少需要一个字段。
-方法名首字母大写（如 `x` -> `X()`），与字段访问（`point.x`）区分。
+为 struct 生成与字段同名的 getter 方法。**仅支持 struct**，至少需要一个字段。
 
 ```moonbit
 #[macro_derive(Getters)]
@@ -326,13 +429,13 @@ struct Point {
   y: String
 }
 // 生成:
-// pub fn Point::X(self: Point) -> Int { self.x }
-// pub fn Point::Y(self: Point) -> String { self.y }
+// pub fn Point::x(self: Point) -> Int { self.x }
+// pub fn Point::y(self: Point) -> String { self.y }
 ```
 
 
 
-### 6.3 EnumFromStr
+### 5.3 EnumFromStr
 
 为 enum 生成 `from_string` 解析函数。**仅支持 enum**，至少需要一个单元变体。
 数据变体（带字段）被自动跳过。
@@ -347,80 +450,160 @@ enum Color {
 // 生成:
 // pub fn Color::from_string(s: String) -> Color? {
 //   match s {
-//     "Red" => Some(Red),
-//     "Green" => Some(Green),
-//     "Blue" => Some(Blue),
+//     "Red" => Some(Color::Red)
+//     "Green" => Some(Color::Green)
+//     "Blue" => Some(Color::Blue)
 //     _ => None
 //   }
 // }
+// 
+// 使用:
+// let c = Color::from_string("Red")   // -> Some(Color::Red)
+// let d = Color::from_string("X")     // -> None
 ```
 
+支持泛型 enum：
 
-## 8. 架构说明
+```moonbit
+#[macro_derive(EnumFromStr)]
+enum Opt[T] {
+  Some(T)
+  None
+}
+// 生成:
+// pub fn Opt::from_string[T](s: String) -> Opt[T]? {
+//   match s {
+//     "None" => Some(Opt::None)
+//     _ => None
+//   }
+// }
+// 
+// 使用:
+// let o = Opt::from_string("None")    // -> Some(Opt::None)
+// let p = Opt::from_string("Some")    // -> None（Some 是数据变体，被跳过）
+```
 
-### 8.1 文件结构
+### 5.4 自定义 derive（macro_derive!）
+
+用 `macro_derive! Name { template }` 自定义派生宏，用 `#[macro_derive(Name)]` 使用。
+
+模板变量：
+- `$T` / `$type` — 类型名
+- `$body` — 类型体原文
+- `$kind` — `"struct"` 或 `"enum"`
+- `$generics` — 泛型声明（如 `"[T]"`）
+- `$Name` — 首字母大写
+- `$fields` — 逗号分隔的字段名列表（仅 struct）
+- `$field_types` — 逗号分隔的字段类型列表（struct 和 enum 均可）
+- `$variants` — 逗号分隔的变体名列表（仅 enum）
+
+```moonbit
+macro_derive! MyMarker {
+  pub fn $T::is_active(self: $T) -> Bool { true }
+}
+
+#[macro_derive(MyMarker)]
+struct Config { debug: Bool }
+// → pub fn Config::is_active(self: Config) -> Bool { true }
+```
+
+更多示例（全部模板变量都用到了）：
+
+```moonbit
+// 自动生成 to_tuple 方法（struct）— 用 $fields, $field_types
+macro_derive! ToTuple {
+  pub fn $T::to_tuple(self: $T) -> ($field_types) { ($fields) }
+}
+
+// 变体计数 + 类型名（enum）— 用 $variants, $kind
+macro_derive! EnumInfo {
+  pub fn $T::variant_count() -> Int { "$variants".split(", ").length() }
+  pub fn $T::kind() -> String { "$kind" }
+}
+
+// 字段名列表（struct）— 用 $fields
+macro_derive! FieldNames {
+  pub fn $T::field_names() -> Array[String] {
+    ["$fields"].flat_map(fn(s) { s.split(", ") })
+  }
+}
+
+// 全类型元数据 — 用 $T $Name $kind $generics $fields $field_types $variants $body
+macro_derive! AllMeta {
+  pub fn $T::type_name() -> String { "$T" }
+  pub fn $T::display_name() -> String { "$Name" }
+  pub fn $T::kind() -> String { "$kind" }
+  pub fn $T::generics_str() -> String { "$generics" }
+  pub fn $T::fields_str() -> String { "$fields" }
+  pub fn $T::field_types_str() -> String { "$field_types" }
+  pub fn $T::variants_str() -> String { "$variants" }
+  pub fn $T::body_str() -> String { "$body" }
+}
+
+// 显示类型签名 — 用 $kind $T $generics
+macro_derive! ShowType {
+  pub fn $T::show_type() -> String { "$kind $T$generics" }
+}
+
+// struct 专用元数据 — 用 $fields $field_types $body
+macro_derive! StructInfo {
+  pub fn $T::field_names() -> String { "$fields" }
+  pub fn $T::field_type_str() -> String { "$field_types" }
+  pub fn $T::struct_body() -> String { "$body" }
+}
+
+// enum 专用元数据 — 用 $variants $kind
+macro_derive! EnumMeta {
+  pub fn $T::variant_names() -> String { "$variants" }
+  pub fn $T::is_enum() -> Bool { "$kind" == "enum" }
+}
+
+// 全部变量
+macro_derive! FullInfo {
+  pub fn $T::full_type_name() -> String { "$Name ($T)" }
+  pub fn $T::kind_str() -> String { "$kind" }
+  pub fn $T::generics_str() -> String { "$generics" }
+  pub fn $T::fields_str() -> String { "$fields" }
+  pub fn $T::field_types_str() -> String { "$field_types" }
+  pub fn $T::variants_str() -> String { "$variants" }
+  pub fn $T::body_str() -> String { "$body" }
+}
+
+// $field_types 也支持带字段的 enum
+macro_derive! FieldTypes {
+  pub fn $T::field_types_str() -> String { "$field_types" }
+}
+#[macro_derive(FieldTypes)]
+enum Result {
+  Ok(Int)
+  Err(String)
+}
+// => pub fn Result::field_types_str() -> String { "Int, String" }
+```
+
+优先级：built-in > custom > unknown。
+
+
+## 6. 架构
+
+### 6.1 文件结构
 
 | 文件 | 用途 |
 |------|------|
-| `reader.mbt` | 宏定义与宏调用的扫描器 |
-| `builtins.mbt` | 5 个内置宏的实现 |
-| `derive.mbt` | 3 个 derive 的实现 |
+| `reader.mbt` | 宏定义与调用的扫描器 |
+| `builtins.mbt` | 13 个内置宏的实现 |
+| `derive.mbt` | 3 个内置 derive + 自定义 derive 支持 |
 | `expander.mbt` | 多轮展开引擎 |
+| `pattern.mbt` | 模式解析与匹配 |
 | `mmprocess/mmprocess.mbt` | CLI 入口 |
-| `mmprocess/demo.mbt` | 9 部分演示 |
+| `mmprocess/demo.mbt` | 27 部分演示 |
 | `test/test.mbt` | 单元测试 |
 | `verify/verify.mbt` | 集成测试 |
-| `moonmacro.sh` | Bash 预处理脚本 |
+| `moonmacro.sh` | 批量预处理脚本 |
 
+### 6.3 设计原则
 
-
-## 9. 命令行工具
-
-### 9.1 mmprocess（核心二进制）
-
-编译为 `mmprocess.exe`，通过 `mmprocess --demo` 或直接接受源文本。
-
-```bash
-moon build --target native
-mmprocess --demo                     # 运行 9 部分演示
-mmprocess "source code here"          # 展开源文本
-mmprocess < input.mbt.macro > out.mbt  # 从 stdin 读取
-```
-
-### 9.2 moonmacro.sh（Bash 包装器）
-
-用于批量处理目录中的所有 `.mbt.macro` 文件。
-
-```bash
-moonmacro.sh [目录]     # 处理目录中的 .mbt.macro 文件
-moonmacro.sh install    # 构建并安装到 ~/.local/bin/
-```
-
-安装后会将两个文件放入 `~/.local/bin/`：
-- `mmprocess`（二进制）
-- `moonmacro.sh`（包装脚本）
-
----
-
-## 10. API 参考
-
-### 10.1 expand_file 函数
-
-最常用的库入口函数。扫描宏定义、展开宏调用和 derive，然后去除宏定义。
-
-```moonbit
-fn expand_file(text: String) -> String
-```
-
-**参数**: `text` — 包含 `macro_rules!` 定义和宏调用的源代码字符串
-
-**返回值**: 展开后不含宏定义的纯 MoonBit 代码
-
-### 10.2 expand_pass 函数
-
-执行一轮展开。
-
-```moonbit
-fn expand_pass(text: String, defs: Array[MacroDef]) -> String
-```
-
+- **纯文本预处理**: 不依赖 MoonBit 解析器或 AST
+- **零外部依赖**: 只使用 MoonBit 标准库
+- **声明式宏**: 模式匹配语法
+- **即插即用**: 内置宏无需导入

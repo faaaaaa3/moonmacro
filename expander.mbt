@@ -56,17 +56,18 @@ fn find_max_capture(frags : Array[PatternFragment], captures : Map[String, Array
 }
 
 pub fn expand_file(source : String, defs : Array[MacroDef]) -> String {
+  let derive_defs = find_derive_defs(source)
   let mut result = source
   let max_passes = 10
   for _pass in 0..<max_passes {
     let before = result
-    result = expand_pass(result, defs)
+    result = expand_pass(result, defs, derive_defs)
     if result == before { break }
   }
   result
 }
 
-fn expand_pass(source : String, defs : Array[MacroDef]) -> String {
+fn expand_pass(source : String, defs : Array[MacroDef], derive_defs : Array[DeriveDef]) -> String {
   let invocations = find_macro_invocations(source, defs)
   if invocations.length() == 0 { return source }
   let sorted = sort_invocations_by_pos(invocations)
@@ -90,7 +91,7 @@ fn expand_pass(source : String, defs : Array[MacroDef]) -> String {
         }
       }
       Derive(_traits, name, kind, generics, body, _s, _e) => {
-        let impls = generate_derives(_traits, name, kind, generics, body)
+        let impls = generate_derives(_traits, name, kind, generics, body, derive_defs)
         kind + " " + name + generics + " " + body + "\n" + impls
       }
     }
@@ -105,7 +106,17 @@ pub fn strip_macro_defs(source : String) -> String {
   let mut pos : Int = 0
   let len = source.length()
   while pos < len {
-    if is_at(source, pos, "macro_rules!") {
+    if is_at(source, pos, "macro_derive!") {
+      let start = pos
+      pos = pos + "macro_derive!".length()
+      pos = skip_ws(source, pos)
+      let _name_res = read_ident(source, pos)
+      pos = _name_res.1
+      pos = skip_ws(source, pos)
+      let body_res = read_balanced(source, pos)
+      pos = body_res.1
+      ranges.push((start, pos))
+    } else if is_at(source, pos, "macro_rules!") {
       let start = pos
       pos = pos + "macro_rules!".length()
       pos = skip_ws(source, pos)

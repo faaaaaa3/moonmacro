@@ -1,19 +1,26 @@
-pub fn generate_derives(traits : Array[String], name : String, kind : String, generics : String, body : String) -> String {
+pub fn generate_derives(traits : Array[String], name : String, kind : String, generics : String, body : String, custom_derives : Array[DeriveDef]) -> String {
   let result = StringBuilder()
   for t in traits {
-    let code = generate_derive_impl(t.trim().to_owned(), name, kind, generics, body)
+    let code = generate_derive_impl(t.trim().to_owned(), name, kind, generics, body, custom_derives)
     result.write_string(code)
     result.write_string("\n")
   }
   result.to_string()
 }
 
-fn generate_derive_impl(trait_name : String, name : String, kind : String, generics : String, body : String) -> String {
+fn generate_derive_impl(trait_name : String, name : String, kind : String, generics : String, body : String, custom_derives : Array[DeriveDef]) -> String {
   match trait_name {
     "Constructor" => generate_constructor(name, kind, generics, body)
     "Getters" => generate_getters(name, kind, generics, body)
     "EnumFromStr" => generate_enum_from_str(name, kind, generics, body)
-    _ => "// unknown derive: " + trait_name + " for " + name + "\n"
+    _ => {
+      for d in custom_derives {
+        if d.name == trait_name {
+          return expand_derive_template(d.template, name, kind, generics, body)
+        }
+      }
+      "// unknown derive: " + trait_name + " for " + name + "\n"
+    }
   }
 }
 
@@ -35,8 +42,7 @@ fn generate_getters(name : String, kind : String, generics : String, body : Stri
   let full = type_with_generics(name, generics)
   let buf = StringBuilder()
   for f in fields {
-    let getter_name = pascal_case(f.0)
-    buf.write_string("pub fn " + name + "::" + getter_name + "(self: " + full + ") -> " + f.1 + " { self." + f.0 + " }\n")
+    buf.write_string("pub fn " + name + "::" + f.0 + "(self: " + full + ") -> " + f.1 + " { self." + f.0 + " }\n")
   }
   buf.to_string()
 }
@@ -60,10 +66,11 @@ fn generate_enum_from_str(name : String, kind : String, generics : String, body 
   if unit.length() == 0 { return "// EnumFromStr requires at least one unit variant\n" }
   let full = type_with_generics(name, generics)
   let buf = StringBuilder()
-  buf.write_string("pub fn " + name + "::from_string(s: String) -> " + full + "? {\n")
+  let gen_list = if generics.length() > 0 { generics } else { "" }
+  buf.write_string("pub fn " + name + "::from_string" + gen_list + "(s: String) -> " + full + "? {\n")
   buf.write_string("  match s {\n")
   for v in unit {
-    buf.write_string("    \"" + v.name + "\" => Some(" + v.name + "),\n")
+    buf.write_string("    \"" + v.name + "\" => Some(" + name + "::" + v.name + ")\n")
   }
   buf.write_string("    _ => None\n")
   buf.write_string("  }\n")
@@ -99,12 +106,12 @@ fn parse_struct_fields(body : String) -> Array[(String, String)] {
       pos = ty_res.1
     }
     pos = skip_ws(body, pos)
-    if pos < len && body[pos] == (',' : UInt16) { pos = pos + 1 }
+    if pos < len && (body[pos] == (',' : UInt16) || body[pos] == (';' : UInt16)) { pos = pos + 1 }
   }
   fields
 }
 
-priv struct EnumVariant {
+struct EnumVariant {
   name : String
   field_types : Array[String]
 }
@@ -187,7 +194,7 @@ fn read_record_fields(s : String, start : Int) -> (Array[(String, String)], Int)
       fields.push((name_res.0, ty_res.0))
       pos = ty_res.1
     }
-    if pos < len && s[pos] == (',' : UInt16) { pos = pos + 1 }
+    if pos < len && (s[pos] == (',' : UInt16) || s[pos] == (';' : UInt16)) { pos = pos + 1 }
   }
   if pos < len { pos = pos + 1 }
   (fields, pos)
@@ -218,7 +225,7 @@ fn read_type(s : String, start : Int) -> (String, Int) {
   let mut depth = 0
   while pos < len {
     let c = s[pos]
-    if (c == (',' : UInt16) || c == ('}' : UInt16) || c == ('\n' : UInt16) || c == ('\r' : UInt16) || c == ('\t' : UInt16)) && depth == 0 { break }
+    if (c == (',' : UInt16) || c == (';' : UInt16) || c == ('}' : UInt16) || c == ('\n' : UInt16) || c == ('\r' : UInt16) || c == ('\t' : UInt16)) && depth == 0 { break }
     if c == ('<' : UInt16) || c == ('[' : UInt16) || c == ('(' : UInt16) { depth = depth + 1 }
     if c == ('>' : UInt16) || c == (']' : UInt16) || c == (')' : UInt16) { depth = depth - 1 }
     pos = pos + 1
