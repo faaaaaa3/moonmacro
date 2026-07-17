@@ -17,7 +17,7 @@ test "verify_derive_constructor_generic" {
   let defs : Array[@moonmacro.MacroDef] = []
   let result = @moonmacro.expand_file(source, defs)
   if result.find("struct Pair[T]") is None { fail("expected Pair[T]") }
-  if result.find("pub fn Pair::new[T]") is None { fail("expected Pair::new[T]") }
+  if result.find("pub fn[T] Pair::new") is None { fail("expected Pair::new[T]") }
   if result.find("first: T, second: T") is None { fail("expected params") }
   if result.find("-> Pair[T]") is None { fail("expected Pair[T] return") }
 }
@@ -162,7 +162,7 @@ test "verify_derive_getters_generic" {
   let defs : Array[@moonmacro.MacroDef] = []
   let result = @moonmacro.expand_file(source, defs)
   if result.find("struct Wrap[T]") is None { fail("struct should be present") }
-  if result.find("pub fn Wrap::value") is None { fail("expected getter value") }
+  if result.find("pub fn[T] Wrap::value") is None { fail("expected getter value, got: " + result) }
   if result.find("self: Wrap[T]") is None { fail("expected self: Wrap[T]") }
   if result.find("-> T") is None { fail("expected T return type") }
 }
@@ -439,13 +439,13 @@ test "verify_custom_derive_fullinfo" {
 }
 
 test "verify_derive_enum_from_str_generic" {
-  let source = "#[macro_derive(EnumFromStr)]\nenum Opt[T] {\n  Some(T)\n  None\n}"
+  let source = "#[macro_derive(EnumFromStr)]\nenum Box[T] {\n  Item(T)\n  Empty\n}"
   let defs : Array[@moonmacro.MacroDef] = []
   let result = @moonmacro.expand_file(source, defs)
-  if result.find("pub fn Opt::from_string[T]") is None { fail("expected generic from_string, got: " + result) }
-  if result.find("-> Opt[T]?") is None { fail("expected Opt[T]? return, got: " + result) }
-  if result.find("\"None\" => Some(Opt::None)") is None { fail("expected None match, got: " + result) }
-  if result.find("\"Some\"") is Some(_) { fail("should not match data variant Some") }
+  if result.find("pub fn[T] Box::from_string") is None { fail("expected generic from_string, got: " + result) }
+  if result.find("-> Box[T]?") is None { fail("expected Box[T]? return, got: " + result) }
+  if result.find("\"Empty\" => Some(Box::Empty)") is None { fail("expected Empty match, got: " + result) }
+  if result.find("\"Item\"") is Some(_) { fail("should not match data variant Item") }
 }
 
 test "verify_derive_enum_from_str_many_variants" {

@@ -238,7 +238,7 @@ test "generate_derive_constructor" {
 test "generate_derive_constructor_generic" {
   let result = @moonmacro.generate_derives(["Constructor"], "Pair", "struct", "[T]", "{ first: T, second: T }", [])
 
-  if result.find("pub fn Pair::new[T]") is None { fail("expected Pair::new[T]") }
+  if result.find("pub fn[T] Pair::new") is None { fail("expected Pair::new[T]") }
   if result.find("first: T, second: T") is None { fail("expected typed params") }
   if result.find("-> Pair[T]") is None { fail("expected Pair[T] return") }
 }
@@ -470,7 +470,7 @@ test "generate_derive_getters_empty_struct" {
 test "generate_derive_getters_generic" {
   let result = @moonmacro.generate_derives(["Getters"], "Wrap", "struct", "[T]", "{ value: T }", [])
 
-  if result.find("pub fn Wrap::value") is None { fail("expected getter value") }
+  if result.find("pub fn[T] Wrap::value") is None { fail("expected getter value, got: " + result) }
   if result.find("self: Wrap[T]") is None { fail("expected self: Wrap[T]") }
   if result.find("-> T") is None { fail("expected T return") }
   if result.find("self.value") is None { fail("expected self.value body") }
@@ -1038,11 +1038,11 @@ test "expand_outside_string_only" {
 }
 
 test "generate_derive_enum_from_str_generic" {
-  let result = @moonmacro.generate_derives(["EnumFromStr"], "Opt", "enum", "[T]", "{\n  Some(T)\n  None\n}", [])
-  if result.find("pub fn Opt::from_string[T]") is None { fail("expected generic from_string, got: " + result) }
-  if result.find("-> Opt[T]?") is None { fail("expected Opt[T]? return, got: " + result) }
-  if result.find("\"None\" => Some(Opt::None)") is None { fail("expected None match, got: " + result) }
-  if result.find("\"Some\"") is Some(_) { fail("should not match data variant Some, got: " + result) }
+  let result = @moonmacro.generate_derives(["EnumFromStr"], "Box", "enum", "[T]", "{\n  Item(T)\n  Empty\n}", [])
+  if result.find("pub fn[T] Box::from_string") is None { fail("expected generic from_string, got: " + result) }
+  if result.find("-> Box[T]?") is None { fail("expected Box[T]? return, got: " + result) }
+  if result.find("\"Empty\" => Some(Box::Empty)") is None { fail("expected Empty match, got: " + result) }
+  if result.find("\"Item\"") is Some(_) { fail("should not match data variant Item, got: " + result) }
 }
 
 test "generate_derive_enum_from_str_many_variants" {
@@ -1089,7 +1089,7 @@ test "generate_derive_enum_from_str_trailing_semicolon" {
 
 test "generate_derive_enum_from_str_complex_generic" {
   let result = @moonmacro.generate_derives(["EnumFromStr"], "Either", "enum", "[L, R]", "{\n  Left(L)\n  Right(R)\n  Both(L, R)\n  Neither\n}", [])
-  if result.find("pub fn Either::from_string[L, R]") is None { fail("expected generic from_string, got: " + result) }
+  if result.find("pub fn[L, R] Either::from_string") is None { fail("expected generic from_string, got: " + result) }
   if result.find("-> Either[L, R]?") is None { fail("expected Either[L, R]? return, got: " + result) }
   if result.find("\"Neither\" => Some(Either::Neither)") is None { fail("expected Neither match, got: " + result) }
   if result.find("\"Left\"") is Some(_) { fail("should not match data variant Left, got: " + result) }
@@ -1104,4 +1104,54 @@ test "generate_derive_enum_from_str_record_variants" {
   if result.find("\"Close\" => Some(Event::Close)") is None { fail("expected Close match, got: " + result) }
   if result.find("\"Click\"") is Some(_) { fail("should not match record variant Click, got: " + result) }
   if result.find("\"KeyPress\"") is Some(_) { fail("should not match data variant KeyPress, got: " + result) }
+}
+
+test "macro_body_with_comment" {
+  let source = "macro_rules! greet {\n  // comment before pattern\n  ($n:expr) => { fn greet_$n() {} }\n}"
+  let defs = @moonmacro.find_macro_defs(source)
+  if defs.length() != 1 { fail("expected 1 macro def, got " + defs.length().to_string()) }
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 0 { fail("expected 0 invocations") }
+}
+
+test "macro_body_with_comment_after_arrow" {
+  let source = "macro_rules! greet {\n  ($n:expr) => // oops\n  { fn greet_$n() {} }\n}"
+  let defs = @moonmacro.find_macro_defs(source)
+  if defs.length() != 1 { fail("expected 1 macro def, got " + defs.length().to_string()) }
+}
+
+test "macro_body_with_multiline_string" {
+  let source = "macro_rules! greet {\n  ($n:expr) => { #|$n is here|# fn greet_$n() {} }\n}"
+  let defs = @moonmacro.find_macro_defs(source)
+  if defs.length() != 1 { fail("expected 1 macro def, got " + defs.length().to_string()) }
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 0 { fail("expected 0 invocations") }
+}
+
+test "comment_inside_macro_args" {
+  let source = "macro_rules! f { ($x:expr) => { $x } }\nf!(42 // comment\n)"
+  let defs = @moonmacro.find_macro_defs(source)
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 1 { fail("expected 1 invocation, got " + invs.length().to_string()) }
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("42") is None { fail("expected 42 in result, got: " + result) }
+}
+
+test "strip_macro_defs_ignores_strings" {
+  let source = "let s = \"macro_rules! fake { ($x:expr) => { $x } }\""
+  let stripped = @moonmacro.strip_macro_defs(source)
+  if stripped != source { fail("macro def in string should not be stripped, got: " + stripped) }
+}
+
+test "read_balanced_skips_comment" {
+  let source = "greet!(x // )\n)"
+  let defs = @moonmacro.find_macro_defs(source)
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 1 { fail("expected 1 invocation, got " + invs.length().to_string()) }
+  match invs[0] {
+    @moonmacro.FuncCall(_, args, _, _, _) => {
+      if args.find(" // )") is None { fail("comment should be in args, got: " + args) }
+    }
+    _ => fail("expected FuncCall")
+  }
 }

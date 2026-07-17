@@ -267,15 +267,18 @@ fn parse_macro_body(body : String) -> Array[MacroRule] {
   let mut pos : Int = 0
   let len = body.length()
   while pos < len {
+    pos = skip_non_code(body, pos)
     pos = skip_ws(body, pos)
     if pos >= len { break }
     if body[pos] == ('(' : UInt16) {
       let pattern_res = read_balanced(body, pos)
       pos = pattern_res.1
+      pos = skip_non_code(body, pos)
       pos = skip_ws(body, pos)
       if pos + 1 < len && body[pos] == ('=' : UInt16) && body[pos + 1] == ('>' : UInt16) {
         pos = pos + 2
       }
+      pos = skip_non_code(body, pos)
       pos = skip_ws(body, pos)
       if pos >= len { break }
       if body[pos] == ('{' : UInt16) || body[pos] == ('(' : UInt16) {
@@ -307,6 +310,8 @@ fn read_balanced(s : String, start : Int) -> (String, Int) {
   let mut pos = start + 1
   let len = s.length()
   while pos < len && depth > 0 {
+    let next = skip_non_code(s, pos)
+    if next > pos { pos = next; continue }
     let c = s[pos]
     if c == open_ch { depth = depth + 1 }
     else if c == close_ch { depth = depth - 1 }

@@ -32,7 +32,7 @@ fn generate_constructor(name : String, kind : String, generics : String, body : 
   let params = fields.map(fn(f) { f.0 + ": " + f.1 }).join(", ")
   let assigns = fields.map(fn(f) { f.0 }).join(", ")
   let gen_list = if generics.length() > 0 { generics } else { "" }
-  "pub fn " + name + "::new" + gen_list + "(" + params + ") -> " + full + " { { " + assigns + " } }\n"
+  "pub fn" + gen_list + " " + name + "::new(" + params + ") -> " + full + " { { " + assigns + " } }\n"
 }
 
 fn generate_getters(name : String, kind : String, generics : String, body : String) -> String {
@@ -40,9 +40,10 @@ fn generate_getters(name : String, kind : String, generics : String, body : Stri
   let fields = parse_struct_fields(body)
   if fields.length() == 0 { return "// Getters requires at least one field\n" }
   let full = type_with_generics(name, generics)
+  let gen_list = if generics.length() > 0 { generics } else { "" }
   let buf = StringBuilder()
   for f in fields {
-    buf.write_string("pub fn " + name + "::" + f.0 + "(self: " + full + ") -> " + f.1 + " { self." + f.0 + " }\n")
+    buf.write_string("pub fn" + gen_list + " " + name + "::" + f.0 + "(self: " + full + ") -> " + f.1 + " { self." + f.0 + " }\n")
   }
   buf.to_string()
 }
@@ -67,7 +68,7 @@ fn generate_enum_from_str(name : String, kind : String, generics : String, body 
   let full = type_with_generics(name, generics)
   let buf = StringBuilder()
   let gen_list = if generics.length() > 0 { generics } else { "" }
-  buf.write_string("pub fn " + name + "::from_string" + gen_list + "(s: String) -> " + full + "? {\n")
+  buf.write_string("pub fn" + gen_list + " " + name + "::from_string(s: String) -> " + full + "? {\n")
   buf.write_string("  match s {\n")
   for v in unit {
     buf.write_string("    \"" + v.name + "\" => Some(" + name + "::" + v.name + ")\n")
@@ -111,7 +112,7 @@ fn parse_struct_fields(body : String) -> Array[(String, String)] {
   fields
 }
 
-struct EnumVariant {
+priv struct EnumVariant {
   name : String
   field_types : Array[String]
 }

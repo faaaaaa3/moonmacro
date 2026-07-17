@@ -106,6 +106,8 @@ pub fn strip_macro_defs(source : String) -> String {
   let mut pos : Int = 0
   let len = source.length()
   while pos < len {
+    pos = skip_non_code(source, pos)
+    if pos >= len { break }
     if is_at(source, pos, "macro_derive!") {
       let start = pos
       pos = pos + "macro_derive!".length()
