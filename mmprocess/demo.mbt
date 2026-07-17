@@ -280,7 +280,7 @@ fn demo_walkthrough() -> Unit {
   println(@moonmacro.strip_macro_defs(r31))
   println("")
 
-  println("=== 32. No expansion inside strings/comments ===\n")
+  println("=== 32. No expansion inside strings/comments/multiline-strings ===\n")
   let src32 = parts[31]
   println("Input:")
   println(src32)
@@ -322,6 +322,6 @@ fn demo_parts() -> Array[String] {
     "todo!()\ntodo!(\"need to implement this\")\n",
     "macro_rules! foo { ($($x:expr),*) => { ($($x),*) } }\nmacro_rules! bar { ($a:expr, $b:expr) => { $a + $b } }\nfoo![1, 2, 3]\nbar!{a, b}\n",
     "#[macro_derive(Constructor)]\nstruct Wrap[T] {\n  value: T\n}\n",
-    "macro_rules! skip_test { ($x:expr) => { fn skip_$x() {} } }\nprintln(\"skip_test!(me) inside string\")\n// skip_test!(me) in comment\nskip_test!(me)\n",
+    "macro_rules! skip_test { ($x:expr) => { fn skip_$x() {} } }\nprintln(\"skip_test!(me) inside string\")\n// skip_test!(me) in comment\nskip_test!(me)\n#| skip_test!(hash) inside #|...|# |#\n$| skip_test!(dollar) inside $|...|# |#\n",
   ]
 }

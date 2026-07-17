@@ -85,7 +85,7 @@ pub fn parse_pattern(s : String) -> Array[PatternFragment] {
 
 pub fn match_pattern(pattern : String, input : String) -> Map[String, Array[String]]? {
   let fragments = parse_pattern(pattern)
-  let captures : Map[String, Array[String]] = {}
+  let captures : Map[String, Array[String]] = Map([])
   let input_str = input.trim().to_owned()
   let result = match_fragments(fragments, captures, input_str, 0)
   match result {

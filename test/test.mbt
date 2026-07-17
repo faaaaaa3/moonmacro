@@ -1143,6 +1143,58 @@ test "strip_macro_defs_ignores_strings" {
   if stripped != source { fail("macro def in string should not be stripped, got: " + stripped) }
 }
 
+test "read_balanced_skips_hash_multiline_string" {
+  let source = "greet!(#| hello world |#)"
+  let defs = @moonmacro.find_macro_defs(source)
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 1 { fail("expected 1 invocation, got " + invs.length().to_string()) }
+  match invs[0] {
+    @moonmacro.FuncCall(_, args, _, _, _) => {
+      if args != "#| hello world |#" { fail("expected #| hello world |# as arg, got: " + args) }
+    }
+    _ => fail("expected FuncCall")
+  }
+}
+
+test "read_balanced_skips_dollar_multiline_string" {
+  let source = "greet!($| hello world |#)"
+  let defs = @moonmacro.find_macro_defs(source)
+  let invs = @moonmacro.find_macro_invocations(source, defs)
+  if invs.length() != 1 { fail("expected 1 invocation, got " + invs.length().to_string()) }
+  match invs[0] {
+    @moonmacro.FuncCall(_, args, _, _, _) => {
+      if args != "$| hello world |#" { fail("expected $| hello world |# as arg, got: " + args) }
+    }
+    _ => fail("expected FuncCall")
+  }
+}
+
+test "no_expand_in_hash_multiline_string_before_macro" {
+  let source = "#| some text with greet!(World) |#\nfn test() { greet!(World) }"
+  let defs = @moonmacro.find_macro_defs(source)
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("greet!(World)") is None { fail("expected greet!(World) in result, got: " + result) }
+}
+
+test "no_expand_in_dollar_multiline_string_before_macro" {
+  let source = "$| some text with greet!(World) |#\nfn test() { greet!(World) }"
+  let defs = @moonmacro.find_macro_defs(source)
+  let result = @moonmacro.expand_file(source, defs)
+  if result.find("greet!(World)") is None { fail("expected greet!(World) in result, got: " + result) }
+}
+
+test "strip_macro_defs_skips_hash_multiline_string" {
+  let source = "#| macro_rules! fake { ($x:expr) => { $x } } |#"
+  let stripped = @moonmacro.strip_macro_defs(source)
+  if stripped != source { fail("macro def in #| string should not be stripped, got: " + stripped) }
+}
+
+test "strip_macro_defs_skips_dollar_multiline_string" {
+  let source = "$| macro_rules! fake { ($x:expr) => { $x } } |#"
+  let stripped = @moonmacro.strip_macro_defs(source)
+  if stripped != source { fail("macro def in $| string should not be stripped, got: " + stripped) }
+}
+
 test "read_balanced_skips_comment" {
   let source = "greet!(x // )\n)"
   let defs = @moonmacro.find_macro_defs(source)
